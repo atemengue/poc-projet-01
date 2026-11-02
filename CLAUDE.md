@@ -39,7 +39,7 @@ Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Les commandes
 Autres écarts :
 - Le dépôt s'appelle `poc-projet-01`, pas `poc-communication`.
 - Les images de `common/infra/docker-compose.yml` sont figées (tag + digest) depuis le 2026-11-02 : Jaeger 1.76.0, Collector contrib 0.164.0, Prometheus v3.15.1, Grafana 13.3.0. Ne pas revenir à `:latest`. Jaeger v1 est déprécié (successeur : `jaegertracing/jaeger` v2) ; une migration changerait l'outillage entre runs, à faire avant les mesures ou pas du tout.
-- Grafana n'a ni volume ni provisioning : toute configuration faite dans l'interface est perdue à la recréation du conteneur.
+- Grafana est configuré par fichiers (`common/infra/grafana/provisioning/`) : sources `Prometheus` (uid `prometheus`, par défaut) et `Jaeger` (uid `jaeger`) ; tout JSON déposé dans `common/infra/grafana/dashboards/` est chargé dans le dossier « POC ». Grafana n'a pas de volume de données : ce qui est fait dans l'interface est perdu à la recréation du conteneur, donc tout tableau de bord doit vivre en JSON dans le dépôt (exporté depuis l'UI si besoin).
 
 ## 3. Structure
 

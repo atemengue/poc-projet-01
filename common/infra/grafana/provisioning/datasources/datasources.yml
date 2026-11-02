@@ -1,0 +1,21 @@
+# Sources de données chargées au démarrage de Grafana.
+# Les uid sont fixes : les tableaux de bord JSON y font référence.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 5s   # = scrape_interval de prometheus.yml
+
+  - name: Jaeger
+    uid: jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: false

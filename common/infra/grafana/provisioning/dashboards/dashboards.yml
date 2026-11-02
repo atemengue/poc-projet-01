@@ -1,0 +1,10 @@
+# Charge tout fichier JSON déposé dans common/infra/grafana/dashboards/.
+apiVersion: 1
+
+providers:
+  - name: poc
+    folder: POC
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
