@@ -16,6 +16,8 @@ Les deux variantes partagent la même pile d'observabilité (traces, métriques)
 
 ## Démarrage
 
+Toutes les commandes se lancent depuis la racine du dépôt.
+
 ### 1. Sélectionner la version de Node
 
 ```bash
@@ -34,11 +36,13 @@ nvm use        # lit .nvmrc (Node 22)
 
 ### 3. Créer le réseau Docker
 
-Le fichier Compose utilise un réseau externe `poc-net`, qu'il faut créer une seule fois :
+Les fichiers Compose utilisent un réseau externe `poc-net`, qu'il faut créer une seule fois :
 
 ```bash
 docker network create poc-net
 ```
+
+Si le réseau existe déjà, la commande renvoie `network with name poc-net already exists` : c'est sans conséquence.
 
 ### 4. Démarrer la pile d'observabilité
 
@@ -50,8 +54,10 @@ docker compose -f common/infra/docker-compose.yml up -d
 |---|---|
 | Jaeger (traces) | http://localhost:16686 |
 | Prometheus (métriques) | http://localhost:9090 |
-| Grafana (tableaux de bord) | http://localhost:3100 |
+| Grafana (tableaux de bord) | http://localhost:3100 (`admin` / `admin`) |
 | OTel Collector (réception OTLP/HTTP) | `localhost:4318` |
+
+Grafana est configuré par fichiers (`common/infra/grafana/`) : les sources de données Prometheus et Jaeger sont déjà déclarées, et tout tableau de bord JSON placé dans `common/infra/grafana/dashboards/` est chargé dans le dossier « POC ». Ce qui est créé dans l'interface est perdu quand le conteneur est recréé : exporter en JSON pour le garder.
 
 Pour arrêter la pile :
 
@@ -64,7 +70,7 @@ docker compose -f common/infra/docker-compose.yml down
 Un seul projet (`sync/` ou `async/`) doit tourner à la fois.
 
 ```bash
-cd sync && docker compose up -d --wait
+docker compose -f sync/docker-compose.yml up -d --wait
 ```
 
 PostgreSQL 17 démarre avec le schéma (`common/db/schema.sql`) et les données de départ (`common/db/seed.sql`), chargés automatiquement au premier démarrage.
@@ -72,7 +78,42 @@ PostgreSQL 17 démarre avec le schéma (`common/db/schema.sql`) et les données 
 - Depuis la machine : `postgres://poc:poc@localhost:55432/poc` (port 55432 pour ne pas entrer en conflit avec un PostgreSQL local)
 - Depuis les conteneurs de `poc-net` : `postgres://poc:poc@postgres:5432/poc`
 
-Pour repartir d'une base vide : `docker compose down -v && docker compose up -d --wait` (dans `sync/`).
+Pour arrêter la base (les données sont conservées) :
+
+```bash
+docker compose -f sync/docker-compose.yml down
+```
+
+Pour repartir d'une base vide (`-v` supprime le volume ; schéma et données de départ sont rechargés au redémarrage) :
+
+```bash
+docker compose -f sync/docker-compose.yml down -v
+docker compose -f sync/docker-compose.yml up -d --wait
+```
+
+## Vérifier que tout fonctionne
+
+**Grafana** : dans *Connections → Data sources*, ouvrir `Prometheus` puis `Jaeger` et cliquer sur **Test** : un message vert doit apparaître.
+
+**Prometheus** : dans Grafana, *Explore* → source `Prometheus` → requête `up`. Les 6 cibles (5 services + rabbitmq) apparaissent ; elles valent 0 tant que les services ne tournent pas.
+
+**Traces** : envoyer une trace de test au collecteur, puis la chercher dans Jaeger (http://localhost:16686, service `test-grafana`) ou dans Grafana (*Explore* → `Jaeger` → *Search*) :
+
+```bash
+NOW=$(($(date +%s) * 1000000000))
+curl -X POST localhost:4318/v1/traces -H 'Content-Type: application/json' -d "{
+  \"resourceSpans\":[{\"resource\":{\"attributes\":[{\"key\":\"service.name\",\"value\":{\"stringValue\":\"test-grafana\"}}]},
+  \"scopeSpans\":[{\"spans\":[{\"traceId\":\"0af7651916cd43dd8448eb211c80319c\",\"spanId\":\"b7ad6b7169203331\",
+  \"name\":\"test-span\",\"kind\":1,\"startTimeUnixNano\":\"$NOW\",\"endTimeUnixNano\":\"$((NOW+50000000))\"}]}]}]}"
+```
+
+**PostgreSQL** :
+
+```bash
+docker compose -f sync/docker-compose.yml exec postgres psql -U poc -d poc -c '\dt' -c 'SELECT sku, stock FROM products ORDER BY sku'
+```
+
+10 tables attendues, puis 5 SKU à 1 000 000 et `SKU-LOW` à 50.
 
 ## Ports des services
 
@@ -90,10 +131,14 @@ Prometheus est déjà configuré pour collecter les métriques des services sur 
 ## Structure
 
 ```
-sync/      variante synchrone (services/ et lib/)
-async/     variante asynchrone (services/ et lib/)
-common/    éléments partagés : infra/, db/, benchmarks/, scripts/
-docs/      documentation
+sync/      variante synchrone (services/, lib/, docker-compose.yml)
+async/     variante asynchrone (services/, lib/)
+common/    éléments partagés, hors comparaison
+  infra/     monitoring : Jaeger, OTel Collector, Prometheus, Grafana
+  db/        schéma, données de départ, conteneur PostgreSQL commun
+  benchmarks/, scripts/   (à venir)
+docs/      decisions-conception.md : choix de conception et leur source
+CLAUDE.md  règles du POC, état d'avancement réel
 ```
 
 Les résultats des benchmarks vont dans `results/` (ignoré par git).
