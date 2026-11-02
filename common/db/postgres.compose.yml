@@ -1,0 +1,31 @@
+# PostgreSQL commun, inclus par sync/docker-compose.yml et async/docker-compose.yml
+# pour garantir une base strictement identique dans les deux variantes.
+# Chaque projet Compose (poc-sync, poc-async) obtient son propre volume.
+services:
+  postgres:
+    image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+    environment:
+      POSTGRES_USER: poc
+      POSTGRES_PASSWORD: poc
+      POSTGRES_DB: poc
+    command: ["postgres", "-c", "max_connections=200"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    ports: ["55432:5432"]          # 5432 souvent pris par un PostgreSQL local
+    cpus: 2
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poc -d poc"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [poc-net]
+
+volumes:
+  pgdata:
+
+networks:
+  poc-net:
+    external: true

@@ -25,16 +25,19 @@ Livrable terminal : mise à jour de `docs/ADR-001.md` (Status, Context, Architec
 Présent :
 - `package.json` + lockfile dans `sync/`, `async/`, `common/` (ESM, Node >= 22, `.nvmrc` = 22), dépendances installées.
 - `common/infra/` : `docker-compose.yml` (projet `poc-obs` : Jaeger, OTel Collector, Prometheus, Grafana sur le réseau externe `poc-net`), `otel-collector.yml` (traces seulement → Jaeger), `prometheus.yml` (cibles `order:3000` … `notification:3004`, `rabbitmq:15692`). Vérifié le 2026-11-02 : les 4 conteneurs `poc-obs` tournent sur `poc-net` et répondent (Jaeger, Prometheus, Grafana, Collector OTLP) ; les cibles Prometheus sont `down` faute de services.
+- `common/db/` : `schema.sql` (10 tables), `seed.sql` (réexécutable), `postgres.compose.yml` (PostgreSQL 17.11 figé, inclus par `sync/docker-compose.yml`, port hôte 55432, user/mdp/base `poc`). Vérifié le 2026-11-02 : chargement, rejeu idempotent, requête d'invariant.
+- `sync/docker-compose.yml` (projet `poc-sync`) : PostgreSQL seulement, pas encore de services.
+- `docs/decisions-conception.md` : décisions de l'étape 1 (DB1–DB11), avec leur source.
 
 Absent (dossiers vides ou fichiers manquants) :
 - tout le code des services (`sync/services/*`, `async/services/*`, donc aucun `domain.js`), `lib/`, CLI `poc` ;
-- `docker-compose.yml` de `sync/` et `async/` (PostgreSQL 17, RabbitMQ et les services n'apparaissent nulle part) ;
-- `common/db/` (schéma, `seed.sql`), `common/benchmarks/` (k6), `common/scripts/` (`reset.js`, `verify-invariants.js`, `run-scenario.js`, `check-parity.js`) ;
-- `docs/ADR-001.md` et le reste de `docs/` ;
+- les services dans `sync/docker-compose.yml`, et `async/docker-compose.yml` en entier (RabbitMQ n'apparaît nulle part) ;
+- `common/benchmarks/` (k6), `common/scripts/` (`reset.js`, `verify-invariants.js`, `run-scenario.js`, `check-parity.js`) ;
+- `docs/ADR-001.md`, hypothèses, traçabilité, matrice de décision ;
 - `poc-communication-etape7.md` ;
 - aucun script npm (`npm test` est le stub par défaut), aucun test `node:test`.
 
-Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Les commandes de la section 9, hormis les deux premières, ne fonctionnent pas encore.
+Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Dans la section 9, seules les deux premières commandes et `docker compose up -d` dans `sync/` (PostgreSQL seul) fonctionnent.
 
 Autres écarts :
 - Le dépôt s'appelle `poc-projet-01`, pas `poc-communication`.

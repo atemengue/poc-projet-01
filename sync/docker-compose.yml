@@ -1,0 +1,8 @@
+# Projet A : workflow synchrone. Un seul projet actif à la fois (mêmes ports que poc-async).
+name: poc-sync
+
+include:
+  - ../common/db/postgres.compose.yml
+
+# Les services (order:3000, payment:3001, inventory:3002, shipping:3003, notification:3004)
+# seront ajoutés ici, limités à 1 CPU / 512 Mo chacun.

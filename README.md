@@ -7,7 +7,7 @@ Preuve de concept qui compare deux façons de faire communiquer les mêmes 5 mic
 
 Les deux variantes partagent la même pile d'observabilité (traces, métriques) pour pouvoir être mesurées et comparées.
 
-> **État actuel :** l'infrastructure et les dépendances sont en place, mais le code des services n'est pas encore écrit. Les étapes ci-dessous démarrent la pile d'observabilité ; le lancement des services sera ajouté ici au fur et à mesure.
+> **État actuel :** la pile d'observabilité et la base PostgreSQL sont en place, mais le code des services n'est pas encore écrit. Le lancement des services sera ajouté ici au fur et à mesure.
 
 ## Prérequis
 
@@ -58,6 +58,21 @@ Pour arrêter la pile :
 ```bash
 docker compose -f common/infra/docker-compose.yml down
 ```
+
+### 5. Démarrer la base de la variante synchrone
+
+Un seul projet (`sync/` ou `async/`) doit tourner à la fois.
+
+```bash
+cd sync && docker compose up -d --wait
+```
+
+PostgreSQL 17 démarre avec le schéma (`common/db/schema.sql`) et les données de départ (`common/db/seed.sql`), chargés automatiquement au premier démarrage.
+
+- Depuis la machine : `postgres://poc:poc@localhost:55432/poc` (port 55432 pour ne pas entrer en conflit avec un PostgreSQL local)
+- Depuis les conteneurs de `poc-net` : `postgres://poc:poc@postgres:5432/poc`
+
+Pour repartir d'une base vide : `docker compose down -v && docker compose up -d --wait` (dans `sync/`).
 
 ## Ports des services
 
