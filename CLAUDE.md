@@ -24,7 +24,7 @@ Livrable terminal : mise à jour de `docs/ADR-001.md` (Status, Context, Architec
 
 Présent :
 - `package.json` + lockfile dans `sync/`, `async/`, `common/` (ESM, Node >= 22, `.nvmrc` = 22), dépendances installées.
-- `common/infra/` : `docker-compose.yml` (projet `poc-obs` : Jaeger, OTel Collector, Prometheus, Grafana sur le réseau externe `poc-net`), `otel-collector.yml` (traces seulement → Jaeger), `prometheus.yml` (cibles `order:3000` … `notification:3004`, `rabbitmq:15692`).
+- `common/infra/` : `docker-compose.yml` (projet `poc-obs` : Jaeger, OTel Collector, Prometheus, Grafana sur le réseau externe `poc-net`), `otel-collector.yml` (traces seulement → Jaeger), `prometheus.yml` (cibles `order:3000` … `notification:3004`, `rabbitmq:15692`). Vérifié le 2026-11-02 : les 4 conteneurs `poc-obs` tournent sur `poc-net` et répondent (Jaeger, Prometheus, Grafana, Collector OTLP) ; les cibles Prometheus sont `down` faute de services.
 
 Absent (dossiers vides ou fichiers manquants) :
 - tout le code des services (`sync/services/*`, `async/services/*`, donc aucun `domain.js`), `lib/`, CLI `poc` ;
@@ -38,7 +38,8 @@ Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Les commandes
 
 Autres écarts :
 - Le dépôt s'appelle `poc-projet-01`, pas `poc-communication`.
-- Les images de `common/infra/docker-compose.yml` sont en `:latest` : à figer avant les runs mesurés pour que les répétitions restent comparables.
+- Les images de `common/infra/docker-compose.yml` sont figées (tag + digest) depuis le 2026-11-02 : Jaeger 1.76.0, Collector contrib 0.164.0, Prometheus v3.15.1, Grafana 13.3.0. Ne pas revenir à `:latest`. Jaeger v1 est déprécié (successeur : `jaegertracing/jaeger` v2) ; une migration changerait l'outillage entre runs, à faire avant les mesures ou pas du tout.
+- Grafana n'a ni volume ni provisioning : toute configuration faite dans l'interface est perdue à la recréation du conteneur.
 
 ## 3. Structure
 
