@@ -1,0 +1,25 @@
+name: poc-obs
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment: [COLLECTOR_OTLP_ENABLED=true]
+    ports: ["16686:16686"]
+    networks: [poc-net]
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel/config.yml"]
+    volumes: ["./otel-collector.yml:/etc/otel/config.yml:ro"]
+    ports: ["4318:4318"]
+    networks: [poc-net]
+  prometheus:
+    image: prom/prometheus:latest
+    volumes: ["./prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9090:9090"]
+    networks: [poc-net]
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3100:3000"]
+    networks: [poc-net]
+networks:
+  poc-net:
+    external: true

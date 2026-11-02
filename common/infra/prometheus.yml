@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: services
+    static_configs:
+      - targets: ["order:3000","payment:3001","inventory:3002","shipping:3003","notification:3004"]
+  - job_name: rabbitmq
+    static_configs:
+      - targets: ["rabbitmq:15692"]   # actif seulement pour le projet async
