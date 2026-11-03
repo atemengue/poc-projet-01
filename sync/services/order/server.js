@@ -6,9 +6,17 @@ import { processOrder } from './workflow.js';
 
 const app = createServer();
 
+// Instant d'arrivée, noté au tout premier point d'entrée de Fastify (avant la lecture du
+// corps, la validation, l'attente du pool et la lecture des prix) : départ des latences (C3).
+const markReceived = (req, _reply, done) => {
+  req.receivedAt = new Date();
+  done();
+};
+
 // Réponse après le workflow complet : 201 si la commande atteint un état terminal
 // (CONFIRMED ou REJECTED), 502 si une dépendance a échoué avant.
-app.post('/orders', async (req, reply) => {
+app.post('/orders', { onRequest: markReceived }, async (req, reply) => {
+  const { receivedAt } = req;
   const { value, errors } = domain.validateOrderRequest(req.body);
   if (errors) return reply.code(400).send({ error: 'INVALID_REQUEST', details: errors });
 
@@ -17,7 +25,7 @@ app.post('/orders', async (req, reply) => {
     return reply.code(400).send({ error: 'UNKNOWN_SKU', details: priced.unknownSkus });
   }
 
-  const order = { ...value, ...priced };
+  const order = { ...value, ...priced, receivedAt };
   const orderId = await withTransaction((client) => domain.createOrder(client, order));
   const log = req.log.child({ orderId });
 

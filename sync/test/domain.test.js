@@ -47,3 +47,37 @@ test('le paiement est refusé uniquement avec le jeton de refus', () => {
   assert.equal(decide({ cardToken: 'tok_ok' }), 'AUTHORIZED');
   assert.equal(decide({}), 'AUTHORIZED');
 });
+
+// --- createOrder : received_at = instant d'arrivée fourni par le transport (cas C3)
+
+import { createOrder } from '../services/order/domain.js';
+
+const fakeClient = () => {
+  const calls = [];
+  return { calls, query: async (sql, params) => { calls.push({ sql, params }); return { rowCount: 1, rows: [] }; } };
+};
+const draft = (receivedAt) => ({
+  receivedAt,
+  customerId: 'c-1',
+  lines: [{ sku: 'SKU-001', quantity: 1, unitPriceCents: 1999 }],
+  totalCents: 1999,
+  paymentInformation: {},
+  shippingAddress: {},
+});
+
+test("createOrder écrit l'instant d'arrivée dans received_at, pas now()", async () => {
+  const client = fakeClient();
+  const receivedAt = new Date('2026-11-03T10:00:00.123Z');
+  await createOrder(client, draft(receivedAt));
+  const insert = client.calls[0];
+  assert.match(insert.sql, /received_at/);
+  assert.ok(insert.params.includes(receivedAt));
+});
+
+test('createOrder refuse une commande sans instant d\'arrivée valide', async () => {
+  for (const receivedAt of [undefined, null, '2026-11-03', new Date('invalide')]) {
+    const client = fakeClient();
+    await assert.rejects(createOrder(client, draft(receivedAt)), TypeError);
+    assert.equal(client.calls.length, 0, 'aucun INSERT ne doit partir');
+  }
+});

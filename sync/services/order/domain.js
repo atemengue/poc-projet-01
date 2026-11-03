@@ -65,13 +65,20 @@ export async function priceItems(db, items) {
 
 // ------------------------------------------------------------------ transitions
 
-/** Crée la commande en RECEIVED avec ses lignes. Transaction requise. */
-export async function createOrder(client, { customerId, lines, totalCents, paymentInformation, shippingAddress }) {
+/**
+ * Crée la commande en RECEIVED avec ses lignes. Transaction requise.
+ * `receivedAt` = instant d'arrivée de la requête, noté par le transport avant toute attente
+ * (pool, lecture des prix) : c'est le départ de toutes les latences (cas C3).
+ */
+export async function createOrder(client, { receivedAt, customerId, lines, totalCents, paymentInformation, shippingAddress }) {
+  if (!(receivedAt instanceof Date) || Number.isNaN(receivedAt.getTime())) {
+    throw new TypeError('createOrder: receivedAt must be a valid Date');
+  }
   const orderId = randomUUID();
   await client.query(
-    `INSERT INTO orders (id, customer_id, total_cents, payment_info, shipping_address)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [orderId, customerId, totalCents, paymentInformation, shippingAddress],
+    `INSERT INTO orders (id, customer_id, total_cents, payment_info, shipping_address, received_at)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [orderId, customerId, totalCents, paymentInformation, shippingAddress, receivedAt],
   );
   await client.query(
     `INSERT INTO order_items (order_id, sku, quantity, unit_price_cents)

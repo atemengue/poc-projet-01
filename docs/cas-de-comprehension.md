@@ -121,19 +121,104 @@ for i in 1 2 3; do order cas2-chaud '[{"sku":"SKU-001","quantity":1}]' tok_ok; d
 
 ## C3 — `received_at` est écrit trop tard
 
-*Observé le 2026-11-03, variante synchrone. Défaut de mesure, non corrigé à cette date.*
+*Observé le 2026-11-03, variante synchrone. **Défaut de mesure corrigé le 2026-11-03** (voir « Correctif appliqué »).*
 
 **Question** : pourquoi la latence calculée depuis la base est-elle plus courte que celle vue par le client ?
 
-**Explication simple** : `received_at` est écrit au moment où la commande est insérée en base, donc **après** l'attente d'une connexion au pool et la lecture des prix. Ce temps d'attente n'est pas compté dans les latences calculées depuis la base.
+### À quoi sert `received_at`
 
-**Rejouer** : reprendre C2 (commande froide), puis lire l'état en base avec le préfixe `cas2-%`.
+Toutes les latences du POC sont calculées **depuis la base** (règle d'équité, CLAUDE.md §6), par soustraction d'horodatages :
 
-**Observer** : pour `cas2-froid`, `compl_ms` (base) est nettement inférieur au temps affiché par curl. Observé : 846 ms en base pour 1 338 ms côté client, soit environ 490 ms invisibles (ouverture de connexion et lecture des prix).
+| Latence | Calcul |
+|---|---|
+| acceptation (critère p95 < 1 s, A-12) | `accepted_at − received_at` |
+| confirmation | `confirmed_at − received_at` |
+| complétion | `completed_at − received_at` |
 
-**Pourquoi ça compte** : sous forte charge (S2), l'attente du pool est précisément ce qui grandit quand le système sature. Avec ce défaut, la dégradation serait sous-estimée dans A comme dans B, peut-être pas dans les mêmes proportions : H1 et H2 sont directement concernées.
+`received_at` est le **point de départ du chronomètre** : il doit marquer l'instant où la commande arrive dans le système. S'il est noté trop tard, toutes les latences paraissent plus courtes qu'en réalité.
 
-**Correctif proposé** (à discuter) : noter l'heure d'arrivée de la requête dès son entrée dans Order et l'écrire dans `received_at` (modification de `domain.js`, donc commune à A et B), et garder la latence mesurée côté client par k6 comme contrôle.
+### Ce que faisait le code (avant correctif)
+
+Dans `sync/services/order/server.js`, `POST /orders` exécute dans l'ordre :
+
+```
+ t=0      la requête arrive dans Order          ← le client attend depuis ici
+   │
+   ├─ 1. validation de la requête                (rapide)
+   ├─ 2. attendre une connexion libre au pool    ← peut être long
+   ├─ 3. lire les prix dans products             (requête SQL)
+   ├─ 4. attendre une connexion pour la transaction
+   │
+ t=?      INSERT INTO orders … received_at = now()   ← le chronomètre démarre ICI
+   │
+   ├─ appel Payment    → accepted_at
+   ├─ appel Inventory  → confirmed_at
+   └─ appels Shipping + Notification → completed_at
+```
+
+`received_at` prend la valeur par défaut `now()` de la colonne (`common/db/schema.sql`) au moment de l'INSERT fait par `createOrder` (`order/domain.js`). Tout ce qui précède (étapes 1 à 4) **n'est pas compté**.
+
+### Ce qu'on a observé
+
+Commande froide (voir C2) :
+
+| Mesure | Valeur |
+|---|---|
+| attente vue par le client (curl) | 1 338 ms |
+| `completed_at − received_at` en base | 846 ms |
+| temps invisible | ≈ 490 ms (ouverture de connexion ≈ 250 ms, lecture des prix ≈ 100 ms, reste) |
+
+À chaud, l'écart n'est que de quelques millisecondes, d'où le fait qu'il soit passé inaperçu.
+
+### Pourquoi c'est grave pour le POC
+
+Le cas froid n'est qu'un symptôme. Le vrai problème apparaît **sous forte charge** :
+
+- à 500 cmd/s (S2), si Order sature, les requêtes **font la queue** pour obtenir une connexion au pool (étape 2) ;
+- ce temps de file d'attente est précisément **ce qui grandit quand le système se dégrade** ;
+- avec le code actuel, il se situe **avant** `received_at`, donc il est invisible : la base pourrait indiquer « p95 = 300 ms » alors que les clients attendent plusieurs secondes.
+
+La dégradation serait sous-estimée, et pas forcément de la même façon dans A et B : en A, la requête HTTP reste ouverte pendant toute la file d'attente ; en B, Order répond `202` après l'INSERT, mais peut aussi faire la queue avant. **H1** (débit sous charge) et **H2** (latence) sont directement concernées.
+
+### Rejouer
+
+```bash
+# attendre au moins 15 s sans rien envoyer (commande froide, voir C2), puis :
+order cas3-froid '[{"sku":"SKU-001","quantity":1}]' tok_ok
+```
+
+Lire l'état en base avec le préfixe `cas3-%` (requête de la section Préparation).
+
+**Observer** : `compl_ms` (base) doit être presque égal au temps affiché par curl (quelques millisecondes d'écart : envoi de la réponse après `completed_at`). Avant le correctif, il était nettement inférieur sur une commande froide.
+
+### Correctif appliqué (2026-11-03)
+
+L'heure est notée **dès l'arrivée de la requête** et écrite dans `received_at` :
+
+```
+ t=0      la requête arrive → receivedAt = new Date()   ← le chronomètre démarre ICI
+   ├─ validation, pool, prix, …
+   └─ INSERT INTO orders … received_at = $receivedAt
+```
+
+- `order/server.js` note `req.receivedAt` dans un hook `onRequest` de la route `POST /orders`, le tout premier point d'entrée de Fastify (avant la lecture du corps), puis le transmet ;
+- `order/domain.js` (`createOrder`) écrit `received_at = $receivedAt` au lieu de la valeur par défaut `now()`, et **refuse** d'insérer sans instant valide. `domain.js` étant commun à A et B, les deux variantes mesureront de la même façon ;
+- deux tests (`sync/test/domain.test.js`) : l'instant fourni est bien celui écrit, et aucun INSERT ne part sans instant valide.
+
+**Vérification après correctif** (services redémarrés, donc première commande froide) :
+
+| Commande | curl | base (`compl_ms`) | écart |
+|---|---|---|---|
+| froide | 246 ms | 242 ms | 4 ms |
+| chaudes (×3) | 121 / 121 / 138 ms | 119 / 118 / 133 ms | 2 à 5 ms |
+
+Avant correctif, l'écart sur une commande froide était d'environ 490 ms.
+
+**Limites du correctif** :
+- **Horloges** : `receivedAt` vient de l'horloge du conteneur Order, les autres horodatages de celle de PostgreSQL. Sur un seul hôte (A-15), ils partagent l'horloge système : pas de décalage significatif. Sur plusieurs machines, ce serait un vrai problème.
+- **Ce qui reste invisible** : le temps passé *avant* que la requête atteigne Order (réseau, file d'attente du système si Order est saturé à 100 % CPU). D'où le contrôle par la **latence mesurée côté client par k6** : si elle diverge fortement de la latence en base, la saturation se situe avant Order.
+
+`async/` devra reprendre le même mécanisme côté transport : noter `receivedAt` à l'arrivée de la requête et le passer à `createOrder` (que `domain.js` impose).
 
 ---
 
