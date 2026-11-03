@@ -26,18 +26,18 @@ Présent :
 - `package.json` + lockfile dans `sync/`, `async/`, `common/` (ESM, Node >= 22, `.nvmrc` = 22), dépendances installées.
 - `common/infra/` : `docker-compose.yml` (projet `poc-obs` : Jaeger, OTel Collector, Prometheus, Grafana sur le réseau externe `poc-net`), `otel-collector.yml` (traces seulement → Jaeger), `prometheus.yml` (cibles `order:3000` … `notification:3004`, `rabbitmq:15692`). Vérifié le 2026-11-02 : les 4 conteneurs `poc-obs` tournent sur `poc-net` et répondent (Jaeger, Prometheus, Grafana, Collector OTLP) ; les cibles Prometheus sont `down` faute de services.
 - `common/db/` : `schema.sql` (10 tables), `seed.sql` (réexécutable), `postgres.compose.yml` (PostgreSQL 17.11 figé, inclus par `sync/docker-compose.yml`, port hôte 55432, user/mdp/base `poc`). Vérifié le 2026-11-02 : chargement, rejeu idempotent, requête d'invariant.
-- `sync/docker-compose.yml` (projet `poc-sync`) : PostgreSQL seulement, pas encore de services.
-- `docs/decisions-conception.md` : décisions de l'étape 1 (DB1–DB11), avec leur source.
+- `sync/` (étape 2, vérifiée le 2026-11-02) : les 5 services (`lib/`, `services/*/{domain,server}.js`, `services/order/workflow.js`), `Dockerfile`, `docker-compose.yml` (projet `poc-sync`, image construite par `payment` puis réutilisée), `npm test` (tests `node:test` des fonctions pures de `domain.js`). Parcours vérifiés à la main : confirmée, paiement refusé, stock insuffisant avec void, requêtes invalides, panne d'Inventory (`502`, commande bloquée `ACCEPTED`). Prometheus voit les 5 cibles `up`, Jaeger reçoit des traces propagées entre services avec les requêtes pg.
+- `docs/invariants.md` : I1 (énoncé) et règles dérivées I2–I11 (propositions).
+- `docs/decisions-conception.md` : décisions DB1–DB11 (base) et SV1–SV12 (services synchrones), avec leur source.
 
 Absent (dossiers vides ou fichiers manquants) :
-- tout le code des services (`sync/services/*`, `async/services/*`, donc aucun `domain.js`), `lib/`, CLI `poc` ;
-- les services dans `sync/docker-compose.yml`, et `async/docker-compose.yml` en entier (RabbitMQ n'apparaît nulle part) ;
+- tout `async/` (services, `lib/`, `docker-compose.yml`) ; la CLI `poc` ;
 - `common/benchmarks/` (k6), `common/scripts/` (`reset.js`, `verify-invariants.js`, `run-scenario.js`, `check-parity.js`) ;
 - `docs/ADR-001.md`, hypothèses, traçabilité, matrice de décision ;
 - `poc-communication-etape7.md` ;
-- aucun script npm (`npm test` est le stub par défaut), aucun test `node:test`.
+- les crochets de l'étape 7 : `POST /admin/chaos`, `Idempotency-Key`, métriques métier ; les noms de span HTTP n'incluent pas la route (`POST` seul).
 
-Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Dans la section 9, seules les deux premières commandes et `docker compose up -d` dans `sync/` (PostgreSQL seul) fonctionnent.
+Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Dans la section 9, seules les deux premières commandes et `docker compose up -d --build` dans `sync/` fonctionnent.
 
 Autres écarts :
 - Le dépôt s'appelle `poc-projet-01`, pas `poc-communication`.

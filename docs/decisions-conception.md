@@ -17,3 +17,20 @@ Chaque décision indique sa source : **Énoncé**, **Régis** (décidé par Rég
 | DB9 | Données de départ : 5 SKU à 1 000 000 d'unités et `SKU-LOW` à 50 unités pour provoquer la compensation (void du paiement). La valeur 50 est à ajuster selon la durée des scénarios et D12. | Proposition |
 | DB10 | Ressources PostgreSQL : 2 CPU / 1 Go, `max_connections=200`, identiques pour A et B. La limite « 1 CPU / 512 Mo » de l'énoncé vise les services. | Proposition |
 | DB11 | PostgreSQL exposé sur le port hôte **55432** (5432 souvent occupé par une installation locale). Dans `poc-net`, les services utilisent `postgres:5432`. | Proposition |
+
+## Services synchrones (étape 2, 2026-11-02)
+
+| # | Décision | Source |
+|---|---|---|
+| SV1 | Chaque service sépare `domain.js` (validation, SQL métier, requête d'invariant, décision de paiement, latence simulée par défaut : identique dans A et B) et `server.js` / `workflow.js` (transport : propre à chaque variante). Les fonctions de `domain.js` reçoivent un client pg et ne gèrent jamais la transaction, pour que `async/` puisse y ajouter `processed_events` et `outbox`. | Proposition (règle de parité de l'énoncé) |
+| SV2 | Order lit les prix directement dans `products` (lecture seule, identique dans A et B) plutôt que d'appeler Inventory : un appel synchrone de prix dans la chorégraphie de B fausserait la comparaison. | Proposition |
+| SV3 | Le refus de paiement est déterministe : `paymentInformation.cardToken = "tok_declined"`. k6 maîtrise ainsi le taux de refus (D12). | Proposition |
+| SV4 | Latences simulées par défaut : Payment 50 ms, Inventory 10 ms, Shipping 20 ms, Notification 10 ms (surcharge : `SIMULATED_LATENCY_MS`). Valeurs inventées, à remplacer si l'énoncé ou Régis en donnent. | Proposition |
+| SV5 | Requête : `items: [{ sku, quantity }]` (une quantité par article), SKU en double refusé. | Proposition (interprétation de l'énoncé) |
+| SV6 | `POST /orders` en synchrone répond après le workflow complet : `201` si la commande atteint `CONFIRMED` ou `REJECTED`, `502` si une dépendance échoue avant (la commande reste `RECEIVED` ou `ACCEPTED`). Échec de Shipping/Notification après confirmation : `201` avec `completed: false`. | Proposition |
+| SV7 | Aucune nouvelle tentative ni compensation technique en cas de panne (règle d'équité). Une panne d'Inventory après paiement autorisé laisse la commande `ACCEPTED` avec un paiement non annulé (violation de I10 attendue en S4). | Énoncé (équité) + Proposition |
+| SV8 | Appels sortants : délai maximal 5 s (`OUTBOUND_TIMEOUT_MS`), pool undici de 64 connexions par origine (`OUTBOUND_CONNECTIONS`). | Proposition |
+| SV9 | Le void du paiement se fait par commande (`POST /payments/void { orderId }`) et annule **tous** ses paiements autorisés, ce qui couvre aussi les doublons (I4). | Proposition |
+| SV10 | Réservation de stock tout ou rien dans une transaction, avec un SAVEPOINT pour annuler une réservation partielle, et verrouillage des SKU dans un ordre fixe pour éviter les interblocages. | Proposition |
+| SV11 | Une seule image Docker pour les 5 services (`node:22.22.2-slim` figée), 1 CPU / 512 Mo chacun, pool pg de 20 connexions par service. | Énoncé (ressources) + Proposition |
+| SV12 | OpenTelemetry (traces HTTP, undici, pg ; `traceId` dans les logs pino) et métriques Node par défaut sur `/metrics` dès l'étape 2. Les métriques de l'étape 7 restent à faire. | Proposition |

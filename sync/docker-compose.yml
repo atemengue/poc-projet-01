@@ -4,5 +4,72 @@ name: poc-sync
 include:
   - ../common/db/postgres.compose.yml
 
-# Les services (order:3000, payment:3001, inventory:3002, shipping:3003, notification:3004)
-# seront ajoutés ici, limités à 1 CPU / 512 Mo chacun.
+# Réglages communs aux 5 services (règle d'équité : 1 CPU / 512 Mo chacun).
+# L'image est construite une seule fois (par payment) puis réutilisée par les autres.
+x-service: &service
+  image: poc-sync-app:local
+  pull_policy: never
+  init: true
+  cpus: 1
+  mem_limit: 512m
+  networks: [poc-net]
+  depends_on:
+    postgres: { condition: service_healthy }
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://localhost:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+
+x-env: &env
+  DATABASE_URL: postgres://poc:poc@postgres:5432/poc
+  PG_POOL_MAX: "20"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  LOG_LEVEL: info
+
+services:
+  order:
+    <<: *service
+    command: ["node", "--import", "./lib/telemetry.js", "services/order/server.js"]
+    environment:
+      <<: *env
+      OTEL_SERVICE_NAME: order
+      PORT: "3000"
+      PAYMENT_URL: http://payment:3001
+      INVENTORY_URL: http://inventory:3002
+      SHIPPING_URL: http://shipping:3003
+      NOTIFICATION_URL: http://notification:3004
+      OUTBOUND_TIMEOUT_MS: "5000"
+      OUTBOUND_CONNECTIONS: "64"
+    ports: ["3000:3000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      payment: { condition: service_healthy }
+      inventory: { condition: service_healthy }
+      shipping: { condition: service_healthy }
+      notification: { condition: service_healthy }
+
+  payment:
+    <<: *service
+    build: .
+    command: ["node", "--import", "./lib/telemetry.js", "services/payment/server.js"]
+    environment: { <<: *env, OTEL_SERVICE_NAME: payment, PORT: "3001" }
+    ports: ["3001:3001"]
+
+  inventory:
+    <<: *service
+    command: ["node", "--import", "./lib/telemetry.js", "services/inventory/server.js"]
+    environment: { <<: *env, OTEL_SERVICE_NAME: inventory, PORT: "3002" }
+    ports: ["3002:3002"]
+
+  shipping:
+    <<: *service
+    command: ["node", "--import", "./lib/telemetry.js", "services/shipping/server.js"]
+    environment: { <<: *env, OTEL_SERVICE_NAME: shipping, PORT: "3003" }
+    ports: ["3003:3003"]
+
+  notification:
+    <<: *service
+    command: ["node", "--import", "./lib/telemetry.js", "services/notification/server.js"]
+    environment: { <<: *env, OTEL_SERVICE_NAME: notification, PORT: "3004" }
+    ports: ["3004:3004"]

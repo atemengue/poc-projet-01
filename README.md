@@ -7,7 +7,7 @@ Preuve de concept qui compare deux façons de faire communiquer les mêmes 5 mic
 
 Les deux variantes partagent la même pile d'observabilité (traces, métriques) pour pouvoir être mesurées et comparées.
 
-> **État actuel :** la pile d'observabilité et la base PostgreSQL sont en place, mais le code des services n'est pas encore écrit. Le lancement des services sera ajouté ici au fur et à mesure.
+> **État actuel :** la pile d'observabilité, la base PostgreSQL et les 5 services de la variante synchrone sont en place. La variante asynchrone n'est pas encore écrite.
 
 ## Prérequis
 
@@ -65,20 +65,22 @@ Pour arrêter la pile :
 docker compose -f common/infra/docker-compose.yml down
 ```
 
-### 5. Démarrer la base de la variante synchrone
+### 5. Démarrer la variante synchrone
 
 Un seul projet (`sync/` ou `async/`) doit tourner à la fois.
 
 ```bash
-docker compose -f sync/docker-compose.yml up -d --wait
+docker compose -f sync/docker-compose.yml up -d --build --wait
 ```
+
+La commande construit l'image des services, puis démarre PostgreSQL et les 5 services ; elle rend la main quand tous sont prêts (`healthy`). `--build` n'est nécessaire qu'après une modification du code.
 
 PostgreSQL 17 démarre avec le schéma (`common/db/schema.sql`) et les données de départ (`common/db/seed.sql`), chargés automatiquement au premier démarrage.
 
 - Depuis la machine : `postgres://poc:poc@localhost:55432/poc` (port 55432 pour ne pas entrer en conflit avec un PostgreSQL local)
 - Depuis les conteneurs de `poc-net` : `postgres://poc:poc@postgres:5432/poc`
 
-Pour arrêter la base (les données sont conservées) :
+Pour tout arrêter (les données sont conservées) :
 
 ```bash
 docker compose -f sync/docker-compose.yml down
@@ -91,13 +93,36 @@ docker compose -f sync/docker-compose.yml down -v
 docker compose -f sync/docker-compose.yml up -d --wait
 ```
 
+## Passer une commande
+
+```bash
+curl -X POST localhost:3000/orders -H 'content-type: application/json' -d '{
+  "customerId": "c1",
+  "items": [{ "sku": "SKU-001", "quantity": 2 }],
+  "paymentInformation": { "cardToken": "tok_ok" },
+  "shippingAddress": { "line1": "1 rue X", "city": "Montréal" }
+}'
+```
+
+Réponse attendue : `201` avec `"status":"CONFIRMED","completed":true`. Suivre la commande : `curl localhost:3000/orders/<orderId>`.
+
+| Pour obtenir | Modifier la requête |
+|---|---|
+| un paiement refusé (`REJECTED`, `PAYMENT_DECLINED`) | `"cardToken": "tok_declined"` |
+| un stock insuffisant (`REJECTED`, `INSUFFICIENT_STOCK`, paiement annulé) | `{ "sku": "SKU-LOW", "quantity": 51 }` |
+| une panne de dépendance (`502`, commande bloquée en `ACCEPTED`) | arrêter Inventory avant : `docker compose -f sync/docker-compose.yml stop inventory` (puis `start inventory`) |
+
+Tests unitaires : `(cd sync && npm test)`.
+
 ## Vérifier que tout fonctionne
 
 **Grafana** : dans *Connections → Data sources*, ouvrir `Prometheus` puis `Jaeger` et cliquer sur **Test** : un message vert doit apparaître.
 
-**Prometheus** : dans Grafana, *Explore* → source `Prometheus` → requête `up`. Les 6 cibles (5 services + rabbitmq) apparaissent ; elles valent 0 tant que les services ne tournent pas.
+**Prometheus** : dans Grafana, *Explore* → source `Prometheus` → requête `up`. Avec la variante synchrone démarrée, les 5 services valent 1 et `rabbitmq` vaut 0 (il n'existe que dans la variante asynchrone).
 
-**Traces** : envoyer une trace de test au collecteur, puis la chercher dans Jaeger (http://localhost:16686, service `test-grafana`) ou dans Grafana (*Explore* → `Jaeger` → *Search*) :
+**Traces des services** : après une commande, chercher le service `order` dans Jaeger (http://localhost:16686) : la trace montre les appels vers les autres services et les requêtes SQL.
+
+**Traces (test sans les services)** : envoyer une trace de test au collecteur, puis la chercher dans Jaeger (http://localhost:16686, service `test-grafana`) ou dans Grafana (*Explore* → `Jaeger` → *Search*) :
 
 ```bash
 NOW=$(($(date +%s) * 1000000000))
@@ -131,13 +156,13 @@ Prometheus est déjà configuré pour collecter les métriques des services sur 
 ## Structure
 
 ```
-sync/      variante synchrone (services/, lib/, docker-compose.yml)
+sync/      variante synchrone : services/<nom>/{domain,server}.js, lib/, test/, Dockerfile, docker-compose.yml
 async/     variante asynchrone (services/, lib/)
 common/    éléments partagés, hors comparaison
   infra/     monitoring : Jaeger, OTel Collector, Prometheus, Grafana
   db/        schéma, données de départ, conteneur PostgreSQL commun
   benchmarks/, scripts/   (à venir)
-docs/      decisions-conception.md : choix de conception et leur source
+docs/      decisions-conception.md (choix et leur source), invariants.md
 CLAUDE.md  règles du POC, état d'avancement réel
 ```
 
