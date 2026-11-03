@@ -150,6 +150,7 @@ k6 n'est pas installé sur la machine de Régis : l'exécuter via Docker sur `po
 
 ## 10. Conventions de travail
 
+- **Suis la méthodologie de `docs/methodologie.md`** : faire le point, expliquer et discuter la conception, n'écrire du code qu'après accord, vérifier, expliquer comment tester, documenter, commiter/pousser sur demande.
 - Réponds en **français** ; le code, les identifiants et les noms de métriques restent en anglais.
 - Documente la compréhension : quand tu prends une décision de conception, note-la dans `docs/` (ADR ou fichier dédié) en distinguant **ce qui vient de l'énoncé**, **ce que Régis a décidé**, et **ce que tu proposes**.
 - Ne présente jamais un résultat comme mesuré s'il ne l'a pas été. Cite le fichier de `results/` qui le prouve.
