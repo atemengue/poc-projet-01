@@ -54,8 +54,12 @@ CREATE INDEX IF NOT EXISTS payments_order_idx ON payments (order_id);
 CREATE TABLE IF NOT EXISTS products (
   sku          text PRIMARY KEY,
   price_cents  integer NOT NULL CHECK (price_cents >= 0),
-  stock        integer NOT NULL CHECK (stock >= 0)   -- quantité disponible (déjà déduite des réservations)
+  stock        integer NOT NULL CHECK (stock >= 0),  -- quantité disponible (déjà déduite des réservations)
+  initial_stock integer NOT NULL CHECK (initial_stock >= 0)  -- valeur du seed, pour vérifier I6 (conservation)
 );
+-- Migration d'une base créée avant l'ajout de initial_stock (sans effet sur une base neuve).
+-- Après cette migration, lancer `npm run reset` (common/) pour aligner stock et initial_stock.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS initial_stock integer NOT NULL DEFAULT 0 CHECK (initial_stock >= 0);
 
 -- Pas d'unicité sur order_id : une double réservation (S5) doit être visible et comptée.
 CREATE TABLE IF NOT EXISTS stock_reservations (

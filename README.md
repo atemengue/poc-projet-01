@@ -114,6 +114,24 @@ Réponse attendue : `201` avec `"status":"CONFIRMED","completed":true`. Suivre l
 
 Tests unitaires : `(cd sync && npm test)`.
 
+## Vérifier les invariants et remettre à zéro
+
+Les invariants (I1 à I11, `docs/invariants.md`) se vérifient en une commande, une fois toutes les commandes en cours terminées :
+
+```bash
+(cd common && npm run verify)
+```
+
+Le rapport sépare **sûreté** (I1–I9, ne doit jamais arriver) et **vivacité** (I10–I11, doit finir par arriver), avec les commandes en infraction. Code de sortie : `0` tout est respecté, `1` au moins une violation (un résultat à documenter, pas une erreur), `2` vérification impossible ou base vide. Pour garder une trace : `(cd common && npm run verify -- --out ../results/essai/invariants.json)`.
+
+Remettre la base dans son état de départ (vide les commandes, remet le stock), sans redémarrer PostgreSQL :
+
+```bash
+(cd common && npm run reset)
+```
+
+Tests du vérificateur (une violation injectée par règle, sans modifier la base) : `(cd common && npm test)`.
+
 ## Vérifier que tout fonctionne
 
 **Grafana** : dans *Connections → Data sources*, ouvrir `Prometheus` puis `Jaeger` et cliquer sur **Test** : un message vert doit apparaître.

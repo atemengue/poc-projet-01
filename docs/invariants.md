@@ -1,7 +1,9 @@
 # Invariants
 
 Source de chaque règle : **Énoncé**, **Régis** ou **Proposition** (proposée par Claude, à valider).
-Toutes se vérifient en SQL **après drainage** (plus aucun message ni requête en vol), par `common/scripts/verify-invariants.js` (à écrire).
+Toutes se vérifient en SQL **après drainage** (plus aucun message ni requête en vol), par `common/scripts/verify-invariants.js` (`cd common && npm run verify`). Chaque règle est une requête de `common/scripts/invariants.js` qui renvoie les éléments en infraction ; `common/test/invariants.test.js` prouve que chacune détecte une violation injectée.
+
+Code de sortie : `0` toutes respectées ; `1` au moins une violation (résultat à documenter, le run reste valide) ; `2` inconclusive (base injoignable, ou aucune commande : rien à vérifier).
 
 Une violation est un **résultat à documenter**, jamais un run à jeter (CLAUDE.md §8).
 
@@ -31,8 +33,8 @@ I1 ne lit que des copies stockées dans `orders`. Les règles suivantes vérifie
 | I3 | Une commande `CONFIRMED` a, pour chaque article, exactement une réservation dans `stock_reservations`, de la quantité commandée. | copie `stock_status` mensongère, réservation manquante | Proposition |
 | I4 | Une commande `REJECTED` pour `INSUFFICIENT_STOCK` n'a plus aucun paiement `AUTHORIZED` (tous `VOIDED`). | compensation non faite : client débité sans commande | Énoncé (compensation) |
 | I5 | Une commande `REJECTED` pour `PAYMENT_DECLINED` n'a ni réservation, ni expédition. | traitement poursuivi après un refus | Proposition |
-| I6 | Conservation du stock : pour chaque SKU, stock du seed − Σ réservations = stock actuel, et stock ≥ 0. | stock perdu ou réservé deux fois | Proposition |
-| I7 | Pas d'effet de bord dupliqué : par commande, au plus un paiement autorisé, une réservation par article, une expédition, une notification par type. | doublons (S5, idempotence désactivée) | Proposition |
+| I6 | Conservation du stock : pour chaque SKU, `initial_stock` (valeur du seed) − Σ réservations = stock actuel, et stock ≥ 0. | stock perdu ou réservé deux fois | Proposition |
+| I7 | Pas d'effet de bord dupliqué : par commande, au plus un paiement (quel que soit son statut : deux lignes = deux appels au prestataire), une réservation par article, une expédition, une notification par type. | doublons (S5, idempotence désactivée) | Proposition |
 | I8 | Une expédition n'existe que pour une commande `CONFIRMED`. | expédition d'une commande non confirmée | Proposition |
 | I9 | Horodatages cohérents avec l'état : `received_at ≤ accepted_at ≤ confirmed_at ≤ completed_at` ; `ACCEPTED`/`CONFIRMED` ⇒ `accepted_at` renseigné ; `CONFIRMED` ⇒ `confirmed_at` renseigné ; `REJECTED` ⇒ `rejected_at` renseigné. | latences fausses (elles sont calculées depuis ces colonnes) | Proposition |
 

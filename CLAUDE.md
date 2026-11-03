@@ -28,18 +28,19 @@ Présent :
 - `common/db/` : `schema.sql` (10 tables), `seed.sql` (réexécutable), `postgres.compose.yml` (PostgreSQL 17.11 figé, inclus par `sync/docker-compose.yml`, port hôte 55432, user/mdp/base `poc`). Vérifié le 2026-11-02 : chargement, rejeu idempotent, requête d'invariant.
 - `sync/` (étape 2, vérifiée le 2026-11-02) : les 5 services (`lib/`, `services/*/{domain,server}.js`, `services/order/workflow.js`), `Dockerfile`, `docker-compose.yml` (projet `poc-sync`, image construite par `payment` puis réutilisée), `npm test` (9 tests `node:test` sur `domain.js`). Parcours vérifiés à la main : confirmée, paiement refusé, stock insuffisant avec void, requêtes invalides, panne d'Inventory (`502`, commande bloquée `ACCEPTED`). Prometheus voit les 5 cibles `up`, Jaeger reçoit des traces propagées entre services avec les requêtes pg.
 - `docs/invariants.md` : I1 (énoncé) et règles dérivées I2–I11 (propositions).
-- `docs/decisions-conception.md` : décisions DB1–DB11 (base) et SV1–SV12 (services synchrones), avec leur source.
+- `common/` (étape 3, vérifiée le 2026-11-03) : `scripts/reset.js` (`npm run reset`), `scripts/verify-invariants.js` + `scripts/invariants.js` (`npm run verify [-- --out <fichier>]`, codes 0/1/2), `test/invariants.test.js` (`npm test`, 14 tests, une violation injectée par règle, en transaction annulée). Colonne `products.initial_stock` ajoutée (I6) ; une base créée avant doit être remise à zéro avec `npm run reset`.
+- `docs/decisions-conception.md` : décisions DB1–DB12 (base), SV1–SV13 (services synchrones), VI1–VI7 (vérification des invariants), avec leur source.
 
 Absent (dossiers vides ou fichiers manquants) :
 - tout `async/` (services, `lib/`, `docker-compose.yml`) ; la CLI `poc` ;
-- `common/benchmarks/` (k6), `common/scripts/` (`reset.js`, `verify-invariants.js`, `run-scenario.js`, `check-parity.js`) ;
+- `common/benchmarks/` (k6), `common/scripts/run-scenario.js` et `check-parity.js` ;
 - `docs/ADR-001.md`, hypothèses, traçabilité, matrice de décision ;
 - `poc-communication-etape7.md` ;
 - les crochets de l'étape 7 : `POST /admin/chaos`, `Idempotency-Key`, métriques métier ; les noms de span HTTP n'incluent pas la route (`POST` seul).
 
 **Défaut de mesure corrigé (2026-11-03)** : `received_at` était écrit à l'INSERT (`now()`), après l'attente du pool et la lecture des prix. Il vaut désormais l'instant d'arrivée de la requête (hook `onRequest` de `POST /orders`), passé à `createOrder`, qui l'exige. `async/` doit faire de même côté transport. Détail : `docs/cas-de-comprehension.md`, C3.
 
-Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Dans la section 9, seules les deux premières commandes et `docker compose up -d --build` dans `sync/` fonctionnent.
+Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Dans la section 9, fonctionnent : les deux premières commandes, `docker compose up -d --build` dans `sync/`, `reset.js` et `verify-invariants.js`.
 
 Autres écarts :
 - Le dépôt s'appelle `poc-projet-01`, pas `poc-communication`.

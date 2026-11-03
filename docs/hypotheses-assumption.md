@@ -104,6 +104,7 @@ Cohérence, complexité de coordination, observabilité, consommation de ressour
 | Q-04 | **Réponse initiale en B** : attend-elle le paiement ? Si oui, B ressemble à l'hybride. Si non, « accepté » arrive de façon asynchrone. | Change le sens de H2 et de H3. |
 | Q-05 | **Comment le client apprend-il qu'il est « accepté »** en B (réponse directe, consultation, notification) ? | Change l'expérience, pas ce qu'on mesure. |
 | Q-06 | **Priorité des drivers** (performance, disponibilité, cohérence, complexité opérationnelle…) : dans quel ordre ? | Sans hiérarchie, la matrice de décision reste difficile à arbitrer. |
+| Q-07 | **Notification si l'expédition échoue** : quand Shipping est indisponible après la confirmation, faut-il quand même notifier le client ? Aujourd'hui (sync), la notification de confirmation n'est pas envoyée et la commande n'est jamais terminée (cas de compréhension C1-d). L'énoncé donne l'ordre Shipping → Notification, pas leur dépendance. *(proposition : ne rien changer, ajouter un comportement reviendrait à ajouter de la résilience à une variante)* | Influe sur I11 (complétion) et sur ce que mesure une panne de Shipping (variante S4b éventuelle). |
 
 ---
 

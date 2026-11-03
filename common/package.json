@@ -2,9 +2,10 @@
   "name": "common",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test",
+    "reset": "node scripts/reset.js",
+    "verify": "node scripts/verify-invariants.js"
   },
   "keywords": [],
   "author": "",
