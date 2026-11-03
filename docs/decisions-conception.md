@@ -1,6 +1,6 @@
 # Décisions de conception
 
-Chaque décision indique sa source : **Énoncé**, **Régis** (décidé par Régis) ou **Proposition** (proposée par Claude, à valider). Une proposition non validée peut être remise en cause sans autre justification.
+Chaque décision indique sa source : **Énoncé**, **Responsable** (décidé par le responsable du projet) ou **Proposition** (proposée par Claude, à valider). Une proposition non validée peut être remise en cause sans autre justification.
 
 ## Base de données (étape 1, 2026-11-02)
 
@@ -26,7 +26,7 @@ Chaque décision indique sa source : **Énoncé**, **Régis** (décidé par Rég
 | SV1 | Chaque service sépare `domain.js` (validation, SQL métier, requête d'invariant, décision de paiement, latence simulée par défaut : identique dans A et B) et `server.js` / `workflow.js` (transport : propre à chaque variante). Les fonctions de `domain.js` reçoivent un client pg et ne gèrent jamais la transaction, pour que `async/` puisse y ajouter `processed_events` et `outbox`. | Proposition (règle de parité de l'énoncé) |
 | SV2 | Order lit les prix directement dans `products` (lecture seule, identique dans A et B) plutôt que d'appeler Inventory : un appel synchrone de prix dans la chorégraphie de B fausserait la comparaison. | Proposition |
 | SV3 | Le refus de paiement est déterministe : `paymentInformation.cardToken = "tok_declined"`. k6 maîtrise ainsi le taux de refus (D12). | Proposition |
-| SV4 | Latences simulées par défaut : Payment 50 ms, Inventory 10 ms, Shipping 20 ms, Notification 10 ms (surcharge : `SIMULATED_LATENCY_MS`). Valeurs inventées, à remplacer si l'énoncé ou Régis en donnent. | Proposition |
+| SV4 | Latences simulées par défaut : Payment 50 ms, Inventory 10 ms, Shipping 20 ms, Notification 10 ms (surcharge : `SIMULATED_LATENCY_MS`). Valeurs inventées, à remplacer si l'énoncé ou le responsable en donnent. | Proposition |
 | SV5 | Requête : `items: [{ sku, quantity }]` (une quantité par article), SKU en double refusé. | Proposition (interprétation de l'énoncé) |
 | SV6 | `POST /orders` en synchrone répond après le workflow complet : `201` si la commande atteint `CONFIRMED` ou `REJECTED`, `502` si une dépendance échoue avant (la commande reste `RECEIVED` ou `ACCEPTED`). Échec de Shipping/Notification après confirmation : `201` avec `completed: false`. | Proposition |
 | SV7 | Aucune nouvelle tentative ni compensation technique en cas de panne (règle d'équité). Une panne d'Inventory après paiement autorisé laisse la commande `ACCEPTED` avec un paiement non annulé (violation de I10 attendue en S4). | Énoncé (équité) + Proposition |

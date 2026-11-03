@@ -18,7 +18,7 @@ Livrable terminal : mise à jour de `docs/ADR-001.md` (Status, Context, Architec
 
 ## 2. État d'avancement
 
-**Annoncé (par Régis)** : étapes 1 à 6 (socle, `sync/`, vérification d'invariant, `async/`, parité, traces) terminées ; étape en cours : **étape 7**, scénarios S1 à S5 (procédure : `poc-communication-etape7.md`).
+**Annoncé (par le responsable)** : étapes 1 à 6 (socle, `sync/`, vérification d'invariant, `async/`, parité, traces) terminées ; étape en cours : **étape 7**, scénarios S1 à S5 (procédure : `poc-communication-etape7.md`).
 
 **Constaté dans le dépôt au 2026-11-02** (le code fait foi) : seul le socle existe. Ne présume pas que le reste est fait ; revérifie avant chaque étape et mets cette liste à jour.
 
@@ -77,7 +77,7 @@ Scénario unique : **Place Order**. Requête minimale : `customerId`, `items[]`,
 
 États : `RECEIVED → ACCEPTED (paiement autorisé) → CONFIRMED (stock réservé)`, ou `REJECTED` (paiement refusé / stock insuffisant, avec compensation).
 
-- **Acceptée** = paiement passé (précision de Régis). **Confirmée** = transaction sur Order.
+- **Acceptée** = paiement passé (précision du responsable). **Confirmée** = transaction sur Order.
 - **Invariant non négociable** : une commande ne peut être confirmée que si le paiement est autorisé **et** le stock réservé. Il est appliqué en **un seul point**, par la même requête dans A et B :
 
 ```sql
@@ -95,7 +95,7 @@ UPDATE orders SET status='CONFIRMED', confirmed_at=now()
 La comparaison n'est valable que si seul le **style** diffère. Donc :
 
 - Même schéma SQL, mêmes colonnes d'horodatage (`received_at`, `accepted_at`, `confirmed_at`, `completed_at`), mêmes latences simulées, mêmes limites de ressources (1 CPU / 512 Mo par service), même charge k6, même budget de retries.
-- Les latences se calculent **depuis la base**, avec les mêmes requêtes pour A et B. Latence d'acceptation = `accepted_at − received_at` (critère p95 < 1 s, précision de Régis du 2026-10-27) ; confirmation ; complétion. Ne compare jamais le p95 d'acceptation d'une variante au p95 de complétion de l'autre.
+- Les latences se calculent **depuis la base**, avec les mêmes requêtes pour A et B. Latence d'acceptation = `accepted_at − received_at` (critère p95 < 1 s, précision du responsable du 2026-10-27) ; confirmation ; complétion. Ne compare jamais le p95 d'acceptation d'une variante au p95 de complétion de l'autre.
 - Pas de circuit breaker ni de mécanisme de résilience ajouté à une variante seulement : cela fausserait la comparaison. Toute amélioration de résilience est une expérience distincte, à documenter.
 - Sous Node, il n'y a pas de thread par requête : l'indicateur « threads/connexions » se lit comme requêtes en vol, sockets occupés, attente dans le pool sortant et retard de la boucle d'événements.
 
@@ -149,13 +149,13 @@ node common/scripts/run-scenario.js --project sync --scenario s1 --rep 1
 node common/scripts/check-parity.js
 ```
 
-k6 n'est pas installé sur la machine de Régis : l'exécuter via Docker sur `poc-net` (`grafana/k6`, cible `http://order:3000` passée par `-e TARGET`).
+k6 n'est pas installé sur la machine de développement : l'exécuter via Docker sur `poc-net` (`grafana/k6`, cible `http://order:3000` passée par `-e TARGET`).
 
 ## 10. Conventions de travail
 
 - **Suis la méthodologie de `docs/methodologie.md`** : faire le point, expliquer et discuter la conception, n'écrire du code qu'après accord, vérifier, expliquer comment tester, documenter, commiter/pousser sur demande.
 - Réponds en **français** ; le code, les identifiants et les noms de métriques restent en anglais.
-- Documente la compréhension : quand tu prends une décision de conception, note-la dans `docs/` (ADR ou fichier dédié) en distinguant **ce qui vient de l'énoncé**, **ce que Régis a décidé**, et **ce que tu proposes**.
+- Documente la compréhension : quand tu prends une décision de conception, note-la dans `docs/` (ADR ou fichier dédié) en distinguant **ce qui vient de l'énoncé**, **ce que le responsable a décidé**, et **ce que tu proposes**.
 - Ne présente jamais un résultat comme mesuré s'il ne l'a pas été. Cite le fichier de `results/` qui le prouve.
 - Ne remplis pas la matrice de décision par des opinions : chaque cellule cite un résultat.
 - Les scripts doivent être idempotents quand c'est possible (reset, seed) et ne jamais supprimer `results/` sans demande.

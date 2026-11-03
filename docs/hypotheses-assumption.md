@@ -1,8 +1,8 @@
 # POC « Communication synchrone et asynchrone » — Hypothèses et assumptions
 
-> Source : l'énoncé « Choisir l'architecture du traitement des commandes d'une plateforme de commerce électronique » et les précisions de Régis (2026-10-23 et 2026-10-27).
+> Source : l'énoncé « Choisir l'architecture du traitement des commandes d'une plateforme de commerce électronique » et les précisions du responsable du projet (2026-10-23 et 2026-10-27).
 > Date de rédaction : 2026-11-02.
-> Rien n'est implémenté ni mesuré. Les éléments sont étiquetés : **énoncé**, **Régis** (précision reçue), **proposition** ou **interprétation** (de ma part, à valider).
+> Rien n'est implémenté ni mesuré. Les éléments sont étiquetés : **énoncé**, **Responsable** (précision reçue du responsable du projet), **proposition** ou **interprétation** (de ma part, à valider).
 
 ---
 
@@ -44,7 +44,7 @@ Cohérence, complexité de coordination, observabilité, consommation de ressour
 ### 1.5 Points de vigilance sur les hypothèses
 
 - **H3 et Payment (interprétation)** : H3 parle d'un service *secondaire*, alors que S3 et S4 ciblent Payment, qui fait partie de l'invariant. Dans le chemin critique, une commande ne peut être au mieux qu'« en attente », jamais confirmée. À préciser dans l'ADR : mesure-t-on le gain d'acceptation ou le gain de confirmation ?
-- **H2 et le sens de « latence »** : depuis la précision de Régis (2026-10-27), le p95 < 1 s se mesure jusqu'à l'état « accepté » dans les deux architectures. La latence de complétion (jusqu'à « confirmé ») doit être rapportée séparément pour que la comparaison reste honnête.
+- **H2 et le sens de « latence »** : depuis la précision du responsable (2026-10-27), le p95 < 1 s se mesure jusqu'à l'état « accepté » dans les deux architectures. La latence de complétion (jusqu'à « confirmé ») doit être rapportée séparément pour que la comparaison reste honnête.
 - **S5 symétrique (proposition)** : un retry client ou un timeout suivi d'un nouvel appel peut dupliquer un paiement ou une réservation en synchrone. Tester l'idempotence des deux variantes rendrait la comparaison équitable.
 
 ### 1.6 Verdicts (à remplir après exécution)
@@ -76,7 +76,7 @@ Cohérence, complexité de coordination, observabilité, consommation de ressour
 | A-09 | L'invariant s'applique aux deux architectures. | Pas de confirmation sans paiement autorisé **et** stock réservé. |
 | A-10 | « NO DECISION » est une conclusion acceptable. | À condition d'être justifiée. |
 
-### 2.2 Précisions de Régis
+### 2.2 Précisions du responsable
 
 | # | Assumption | Date | Statut |
 |---|---|---|---|
