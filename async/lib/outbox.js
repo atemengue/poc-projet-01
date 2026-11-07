@@ -19,6 +19,10 @@ const SWEEP_INTERVAL_MS = Number(process.env.OUTBOX_SWEEP_INTERVAL_MS ?? 1000);
 const SWEEP_MIN_AGE_MS = Number(process.env.OUTBOX_SWEEP_MIN_AGE_MS ?? 1000);
 const SWEEP_BATCH = 500;
 
+// K3 (S5, H4) : chaque événement est publié DUPLICATE_DELIVERY fois (même eventId), pour simuler
+// une livraison multiple. 1 en temps normal.
+const DUPLICATE_DELIVERY = Math.max(1, Number(process.env.DUPLICATE_DELIVERY ?? 1));
+
 /** Écrit un événement dans l'outbox (transaction requise). Retourne son eventId. */
 export async function addEvent(client, { type, orderId, payload }) {
   const eventId = randomUUID();
@@ -45,9 +49,11 @@ export function toEnvelope(row) {
 
 // Publie dans le contexte de trace enregistré à l'écriture : l'instrumentation amqplib crée le
 // span de publication comme enfant de ce contexte et en injecte le traceparent dans le message.
-function publishRow(broker, row) {
+async function publishRow(broker, row) {
   const parent = propagation.extract(ROOT_CONTEXT, row.headers ?? {});
-  return context.with(parent, () => broker.publish(toEnvelope(row), { ...row.headers }));
+  for (let i = 0; i < DUPLICATE_DELIVERY; i += 1) {
+    await context.with(parent, () => broker.publish(toEnvelope(row), { ...row.headers }));
+  }
 }
 
 async function publishLocked(broker, selectSql, params) {

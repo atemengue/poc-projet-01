@@ -12,6 +12,11 @@ import { withTransaction } from './db.js';
 import { logger } from './logger.js';
 import { trace } from '@opentelemetry/api';
 import { addEvent, publishEvents } from './outbox.js';
+import { duplicatesDetected } from './metrics.js';
+
+// K3 (S5, H4) : IDEMPOTENCY=off désactive la protection (témoin) : un événement reçu deux fois
+// est traité deux fois.
+const IDEMPOTENCY = (process.env.IDEMPOTENCY ?? 'on') !== 'off';
 
 /** Enregistre l'événement comme traité. false si ce consommateur l'a déjà traité (doublon). */
 export async function markProcessed(client, consumer, eventId) {
@@ -29,13 +34,13 @@ export async function markProcessed(client, consumer, eventId) {
  * emit(type, payload) écrit un événement de la même commande dans l'outbox.
  * Retourne { status: 'ignored' | 'duplicate' | 'processed', emitted: eventId[] }.
  */
-export async function processEvent({ consumer, handlers, event, transaction = withTransaction }) {
+export async function processEvent({ consumer, handlers, event, transaction = withTransaction, idempotency = IDEMPOTENCY }) {
   const handler = handlers[event.type];
   if (!handler) return { status: 'ignored', emitted: [] };
 
   await handler.latency?.(event);
   return transaction(async (client) => {
-    if (!(await markProcessed(client, consumer, event.eventId))) {
+    if (idempotency && !(await markProcessed(client, consumer, event.eventId))) {
       return { status: 'duplicate', emitted: [] };
     }
     const emitted = [];
@@ -75,7 +80,10 @@ export async function startConsumer(broker, { queue, consumer, handlers }) {
     }
 
     broker.ack(message);
-    if (result.status === 'duplicate') log.info('duplicate event ignored');
+    if (result.status === 'duplicate') {
+      duplicatesDetected.inc();
+      log.info('duplicate event ignored');
+    }
     if (result.status === 'ignored') log.warn('no handler for event type');
 
     // Un échec ici n'est pas une perte : le balayage de secours republiera ces lignes.

@@ -3,7 +3,7 @@
 // 1. Code métier : chaque services/<nom>/domain.js doit être identique dans les deux projets
 //    (empreinte SHA-256). Une divergence voulue doit être documentée dans l'ADR.
 // 2. Configuration (règle d'équité) : pour chaque service, mêmes cpus, mem_limit, PG_POOL_MAX,
-//    LOG_LEVEL et SIMULATED_LATENCY_MS ; PREFETCH de chaque consommateur async/ égal à
+//    LOG_LEVEL, SIMULATED_LATENCY_MS, taux d'échantillonnage des traces (PC3) et IDEMPOTENCY ; PREFETCH de chaque consommateur async/ égal à
 //    OUTBOUND_CONNECTIONS d'Order dans sync/ (concurrence maximale reçue par un service, AS6).
 //
 //   node common/scripts/check-parity.js [--out results/.../parity.json]   (ou : cd common && npm run parity)
@@ -71,7 +71,7 @@ export function compareConfig(syncCfg, asyncCfg, services = SERVICES) {
     }
     add('cpus', svc, field(syncCfg, svc, 'cpus'), field(asyncCfg, svc, 'cpus'));
     add('mem_limit', svc, field(syncCfg, svc, 'mem_limit'), field(asyncCfg, svc, 'mem_limit'));
-    for (const key of ['PG_POOL_MAX', 'LOG_LEVEL', 'SIMULATED_LATENCY_MS']) {
+    for (const key of ['PG_POOL_MAX', 'LOG_LEVEL', 'SIMULATED_LATENCY_MS', 'OTEL_TRACES_SAMPLER', 'OTEL_TRACES_SAMPLER_ARG', 'IDEMPOTENCY']) {
       add(key, svc, env(syncCfg, svc, key), env(asyncCfg, svc, key));
     }
     // AS6 : concurrence maximale reçue par un service.

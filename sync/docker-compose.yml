@@ -26,6 +26,10 @@ x-env: &env
   PG_POOL_MAX: "20"
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
   LOG_LEVEL: info
+  # Paramètres d'un run, fixés par run-scenario.js (valeurs par défaut sinon) :
+  OTEL_TRACES_SAMPLER: parentbased_traceidratio
+  OTEL_TRACES_SAMPLER_ARG: ${TRACE_RATIO:-1.0}            # PC3 : 1.0 par défaut, 0.1 pendant S1 à S4
+  IDEMPOTENCY: ${IDEMPOTENCY:-on}                        # K2/K3 (S5) : off pour le témoin
 
 services:
   order:

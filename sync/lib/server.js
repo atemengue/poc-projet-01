@@ -2,13 +2,22 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import Fastify from 'fastify';
 import { trace } from '@opentelemetry/api';
 import { logger } from './logger.js';
-import { register } from './metrics.js';
+import { register, inflightRequests } from './metrics.js';
 import { pool } from './db.js';
 
-/** Retourne une fonction qui attend la latence simulée du service (défaut du domain.js, surcharge par env). */
+// Latence injectée pendant un run (K1, S3) par POST /admin/chaos ; null = latence normale.
+let chaosLatencyMs = null;
+
+/**
+ * Retourne une fonction qui attend la latence simulée du service : défaut du domain.js,
+ * surchargé par SIMULATED_LATENCY_MS, et remplacé pendant un run par /admin/chaos.
+ */
 export function simulatedLatency(defaultMs) {
   const ms = Number(process.env.SIMULATED_LATENCY_MS ?? defaultMs);
-  return () => (ms > 0 ? sleep(ms) : Promise.resolve());
+  return () => {
+    const wait = chaosLatencyMs ?? ms;
+    return wait > 0 ? sleep(wait) : Promise.resolve();
+  };
 }
 
 /** Pose order.id sur le span actif (requête HTTP ou traitement d'événement). */
@@ -35,6 +44,28 @@ export function createServer() {
     const orderId = req.body?.orderId ?? req.params?.id;
     if (orderId) tagOrder(orderId);
   });
+
+  // H1, H3c : requêtes en cours (hors routes techniques).
+  const counted = (req) => !/^\/(health|metrics|admin)/.test(req.url);
+  app.addHook('onRequest', async (req) => { if (counted(req)) inflightRequests.inc(); });
+  app.addHook('onResponse', async (req) => { if (counted(req)) inflightRequests.dec(); });
+
+  // K1 (S3) : latence du service changée pendant un run. { latencyMs: 2000 } pour ralentir,
+  // { latencyMs: null } pour revenir à la latence normale.
+  app.post('/admin/chaos', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['latencyMs'],
+        properties: { latencyMs: { type: ['integer', 'null'], minimum: 0 } },
+      },
+    },
+  }, async (req) => {
+    chaosLatencyMs = req.body.latencyMs;
+    req.log.warn({ latencyMs: chaosLatencyMs }, 'chaos latency set');
+    return { latencyMs: chaosLatencyMs };
+  });
+  app.get('/admin/chaos', async () => ({ latencyMs: chaosLatencyMs }));
 
   app.get('/health', async () => ({ status: 'ok' }));
   app.get('/metrics', async (_req, reply) => {

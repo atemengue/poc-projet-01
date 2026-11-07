@@ -75,3 +75,14 @@ test("une erreur du handler remonte (le message partira en DLQ) et n'est pas ava
   const handlers = { OrderCreated: { handle: async () => { throw new Error('boom'); } } };
   await assert.rejects(processEvent({ consumer: 'payment', handlers, event, transaction: inTx(fakeClient()) }), /boom/);
 });
+
+test('IDEMPOTENCY=off (témoin) : un événement reçu deux fois est traité deux fois', async () => {
+  const seen = new Set();
+  let effects = 0;
+  const handlers = { OrderCreated: { handle: async () => { effects += 1; } } };
+  const opts = { consumer: 'payment', handlers, event, idempotency: false };
+  await processEvent({ ...opts, transaction: inTx(fakeClient(seen)) });
+  const second = await processEvent({ ...opts, transaction: inTx(fakeClient(seen)) });
+  assert.equal(second.status, 'processed');
+  assert.equal(effects, 2);
+});
