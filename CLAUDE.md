@@ -29,12 +29,13 @@ Présent :
 - `sync/` (étape 2, vérifiée le 2026-11-02) : les 5 services (`lib/`, `services/*/{domain,server}.js`, `services/order/workflow.js`), `Dockerfile`, `docker-compose.yml` (projet `poc-sync`, image construite par `payment` puis réutilisée), `npm test` (10 tests `node:test` sur `domain.js`). Parcours vérifiés à la main : confirmée, paiement refusé, stock insuffisant avec void, requêtes invalides, panne d'Inventory (`502`, commande bloquée `ACCEPTED`). Prometheus voit les 5 cibles `up`, Jaeger reçoit des traces propagées entre services avec les requêtes pg.
 - `docs/invariants.md` : I1 (énoncé) et règles dérivées I2–I11 (propositions).
 - `common/` (étape 3, vérifiée le 2026-11-03) : `scripts/reset.js` (`npm run reset`), `scripts/verify-invariants.js` + `scripts/invariants.js` (`npm run verify [-- --out <fichier>]`, codes 0/1/2), `test/invariants.test.js` (`npm test`, 14 tests, une violation injectée par règle, en transaction annulée). Colonne `products.initial_stock` ajoutée (I6) ; une base créée avant doit être remise à zéro avec `npm run reset`.
+- `docs/ADR-001.md` : version initiale (2026-11-07), décision candidate ADOPT EVENT-DRIVEN, figée ; sections finales vides.
 - `docs/decisions-conception.md` : décisions DB1–DB12 (base), SV1–SV13 (services synchrones), VI1–VI7 (vérification des invariants), avec leur source.
 
 Absent (dossiers vides ou fichiers manquants) :
 - tout `async/` (services, `lib/`, `docker-compose.yml`) ; la CLI `poc` ;
 - `common/benchmarks/` (k6), `common/scripts/run-scenario.js` et `check-parity.js` ;
-- `docs/ADR-001.md` (décision candidate à écrire avant les mesures), PoC Plan, Architecture Analysis, matrice de décision (les hypothèses et la traçabilité sont dans `docs/hypotheses-assumption.md`) ;
+- PoC Plan, Architecture Analysis, matrice de décision (les hypothèses et la traçabilité sont dans `docs/hypotheses-assumption.md`) ;
 - `poc-communication-etape7.md` ;
 - les crochets de l'étape 7 : `POST /admin/chaos`, `Idempotency-Key`, métriques métier ; les noms de span HTTP n'incluent pas la route (`POST` seul).
 
