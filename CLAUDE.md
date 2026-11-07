@@ -26,7 +26,7 @@ Présent :
 - `package.json` + lockfile dans `sync/`, `async/`, `common/` (ESM, Node >= 22, `.nvmrc` = 22), dépendances installées.
 - `common/infra/` : `docker-compose.yml` (projet `poc-obs` : Jaeger, OTel Collector, Prometheus, Grafana sur le réseau externe `poc-net`), `otel-collector.yml` (traces seulement → Jaeger), `prometheus.yml` (cibles `order:3000` … `notification:3004`, `rabbitmq:15692`). Vérifié le 2026-11-02 : les 4 conteneurs `poc-obs` tournent sur `poc-net` et répondent (Jaeger, Prometheus, Grafana, Collector OTLP) ; les cibles Prometheus sont `down` faute de services.
 - `common/db/` : `schema.sql` (10 tables), `seed.sql` (réexécutable), `postgres.compose.yml` (PostgreSQL 17.11 figé, inclus par `sync/docker-compose.yml`, port hôte 55432, user/mdp/base `poc`). Vérifié le 2026-11-02 : chargement, rejeu idempotent, requête d'invariant.
-- `sync/` (étape 2, vérifiée le 2026-11-02) : les 5 services (`lib/`, `services/*/{domain,server}.js`, `services/order/workflow.js`), `Dockerfile`, `docker-compose.yml` (projet `poc-sync`, image construite par `payment` puis réutilisée), `npm test` (9 tests `node:test` sur `domain.js`). Parcours vérifiés à la main : confirmée, paiement refusé, stock insuffisant avec void, requêtes invalides, panne d'Inventory (`502`, commande bloquée `ACCEPTED`). Prometheus voit les 5 cibles `up`, Jaeger reçoit des traces propagées entre services avec les requêtes pg.
+- `sync/` (étape 2, vérifiée le 2026-11-02) : les 5 services (`lib/`, `services/*/{domain,server}.js`, `services/order/workflow.js`), `Dockerfile`, `docker-compose.yml` (projet `poc-sync`, image construite par `payment` puis réutilisée), `npm test` (10 tests `node:test` sur `domain.js`). Parcours vérifiés à la main : confirmée, paiement refusé, stock insuffisant avec void, requêtes invalides, panne d'Inventory (`502`, commande bloquée `ACCEPTED`). Prometheus voit les 5 cibles `up`, Jaeger reçoit des traces propagées entre services avec les requêtes pg.
 - `docs/invariants.md` : I1 (énoncé) et règles dérivées I2–I11 (propositions).
 - `common/` (étape 3, vérifiée le 2026-11-03) : `scripts/reset.js` (`npm run reset`), `scripts/verify-invariants.js` + `scripts/invariants.js` (`npm run verify [-- --out <fichier>]`, codes 0/1/2), `test/invariants.test.js` (`npm test`, 14 tests, une violation injectée par règle, en transaction annulée). Colonne `products.initial_stock` ajoutée (I6) ; une base créée avant doit être remise à zéro avec `npm run reset`.
 - `docs/decisions-conception.md` : décisions DB1–DB12 (base), SV1–SV13 (services synchrones), VI1–VI7 (vérification des invariants), avec leur source.
@@ -34,7 +34,7 @@ Présent :
 Absent (dossiers vides ou fichiers manquants) :
 - tout `async/` (services, `lib/`, `docker-compose.yml`) ; la CLI `poc` ;
 - `common/benchmarks/` (k6), `common/scripts/run-scenario.js` et `check-parity.js` ;
-- `docs/ADR-001.md`, hypothèses, traçabilité, matrice de décision ;
+- `docs/ADR-001.md` (décision candidate à écrire avant les mesures), PoC Plan, Architecture Analysis, matrice de décision (les hypothèses et la traçabilité sont dans `docs/hypotheses-assumption.md`) ;
 - `poc-communication-etape7.md` ;
 - les crochets de l'étape 7 : `POST /admin/chaos`, `Idempotency-Key`, métriques métier ; les noms de span HTTP n'incluent pas la route (`POST` seul).
 
@@ -173,14 +173,16 @@ k6 n'est pas installé sur la machine de développement : l'exécuter via Docker
 
 Si une de ces décisions a été tranchée depuis, mets ce tableau à jour plutôt que de t'y fier.
 
-## 12. Hypothèses suivies
+## 12. Problème, assumptions et hypothèses
 
-- **H1 — Scalabilité** : sous forte charge, l'événementiel maintient un débit supérieur (S2).
-- **H2 — Latence** : le synchrone offre une latence plus faible en charge normale (S1).
-- **H3 — Résilience** : en cas de dépendance indisponible, l'événementiel accepte des commandes dans davantage de situations (S3, S4). Attention : S3/S4 ciblent Payment, qui est dans le chemin de l'invariant ; accepter sans paiement autorisé ne peut être qu'une acceptation « en attente », jamais une confirmation.
-- Hypothèses additionnelles proposées : l'événementiel exige une idempotence explicite pour tenir l'invariant (S5) ; la reconstruction d'une commande est plus coûteuse en événementiel.
+**La référence est `docs/hypotheses-assumption.md`** (problème, incertitude, assumptions A-01–A-30, questions Q-01–Q-07, hypothèses avec mesure et seuil, traçabilité métrique → hypothèse, verdicts, menaces à la validité). Ne te fie pas à un résumé : relis ce fichier avant de concevoir une mesure ou un scénario.
 
-Chaque métrique doit répondre à : **quelle hypothèse permet-elle d'évaluer ?**
+Repères (restructuration du 2026-11-07) :
+- **Assumption centrale** : l'événementiel est plus scalable que le synchrone. Elle est mise à l'épreuve par **H1** (S2, 500 cmd/s : débit accepté ≥ 95 % du débit offert, p95 d'acceptation < 1 s, 0 violation de I1), seuils validés par le responsable du POC.
+- Autres hypothèses, seuils encore **à valider** : H2 (latence de complétion, S1), H3a (panne de Shipping, scénario **S4b à ajouter**), H3b (Payment indisponible, S4), H3c (Payment lent, S3), H4 (coût de l'idempotence, S5), H5 (part de traces complètes), H6 (hybride, brouillon en attente de Q-02 : troisième variante mesurée ou déduction).
+- Les hypothèses, seuils et critères de verdict se fixent **avant** toute mesure ; un seuil ne se modifie pas après avoir vu les résultats.
+
+Chaque métrique doit répondre à : **quelle hypothèse permet-elle d'évaluer ?** Une métrique de diagnostic explique un verdict, elle ne décide rien.
 
 ## 13. Limites à garder à l'esprit
 
