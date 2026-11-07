@@ -259,3 +259,60 @@ docker compose -f sync/docker-compose.yml start payment
 **Pourquoi ça compte** :
 - `up = 1` signifie seulement que le service répond à `/metrics`, **pas** que les commandes passent : si PostgreSQL tombait, les services resteraient à 1.
 - En S4 (Payment arrêté 30 s), la courbe `up` de Payment date précisément la fenêtre de panne, ce qui sert à lire les autres métriques sur la même période.
+
+---
+
+## C5 — Où sature le synchrone
+
+*Observé le 2026-11-07, variante synchrone, essai à blanc `dry-sync-02` (jamais cité dans l'ADR).*
+
+**Question** : à partir de quelle charge `sync/` ne suit plus, et pourquoi ?
+
+**Explication simple** : en synchrone, Order fait tout le travail pour chaque commande : il reçoit la requête, interroge la base (environ 8 requêtes), appelle les quatre services l'un après l'autre et attend leurs réponses, en produisant les spans de trace de tout cela. Il n'a qu'un CPU. Vers 250 à 300 cmd/s, ce CPU est plein : les nouvelles commandes attendent leur tour dans la boucle d'événements d'Order, **avant** les appels sortants (d'où l'absence de timeout à 5 s), et la latence passe de quelques dizaines de millisecondes à plusieurs secondes. Il n'y a aucune erreur : le système ne casse pas, il fait attendre.
+
+**Rejouer** (environ 5 min 30 ; le `reset` efface toutes les commandes) :
+
+```bash
+K6=grafana/k6:2.3.0@sha256:2dd4756ec6e14e62778916e1eb850108e4b499304c02df56760fa0bdb0fba0b8
+RUN=cas5-01
+OUT=results/dry-run/sync/$RUN && mkdir -p $OUT
+
+(cd common && npm run reset)
+
+docker run --rm --network poc-net \
+  -v "$PWD/common/benchmarks:/scripts:ro" -v "$PWD/results:/results" \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write \
+  -e K6_PROMETHEUS_RW_TREND_STATS='p(50),p(95),p(99),avg,max' \
+  $K6 run -o experimental-prometheus-rw --tag testid=$RUN \
+  -e RUN_ID=$RUN -e PROFILE=steps \
+  --summary-export=/results/dry-run/sync/$RUN/k6-summary.json /scripts/place-order.js
+
+(cd common && npm run verify)
+node common/scripts/latency.js --run $RUN --slice 60
+```
+
+Pendant le run : Grafana → **POC — Run k6 et services** (run `cas5-01`), et dans un second terminal `docker stats $(docker compose -f sync/docker-compose.yml ps -q)`.
+
+Paliers du profil `steps` : 30 s à 50 cmd/s, puis 1 min à 100, 200, 300, 400 et 500 cmd/s. Les tranches de 60 s de `latency.js` sont décalées de 30 s par rapport aux paliers.
+
+**Observer** (valeurs de `dry-sync-02`) :
+
+| Tranche | Charge envoyée | Reçu/s | p95 acceptation | Lecture |
+|---|---|---|---|---|
+| 0–60 s | 50 → 100 | 73 | 68 ms | à l'aise |
+| 60–120 s | 100 → 200 | 146 | 78 ms | à l'aise |
+| 120–180 s | 200 → 300 | 245 | 566 ms | début de saturation |
+| 180–240 s | 300 → 400 | 297 | 4,3 s | saturé |
+| 240–300 s | 400 → 500 | 255 | 10,3 s | saturé, le débit reçu baisse |
+
+- **Grafana, CPU par service** : Order proche de 100 % (sa limite d'un CPU) ; les autres restent sous 40 %.
+- **Boucle d'événements d'Order** : pics jusqu'à environ 550 ms.
+- **VUs k6** : plafond de 3 000 atteint ; **itérations perdues** : 21 204 (23 %).
+- **Statuts HTTP** : 100 % de `201`, aucun `502`.
+- **`verify`** : OK sur I1 à I11 (toutes les commandes terminées).
+
+**Pourquoi ça compte** :
+- **H1** : capacité de `sync/` sur ce banc d'essai d'environ 250 à 300 cmd/s ; au-delà, le seuil p95 < 1 s n'est plus tenu. Repère pour l'événementiel, pas une preuve (essai à blanc).
+- **Équité** : le goulot est dans Order parce qu'il orchestre. En chorégraphie, ce travail sera réparti entre les services ; une partie de l'écart mesuré viendra donc de l'orchestration, pas seulement de la communication (menace à la validité, `docs/hypotheses-assumption.md` §7).
+- **Protocole** : au-delà de la saturation, le plafond de VUs bride k6 (loi de Little : 300 cmd/s × 10 s ≈ 3 000 requêtes en vol). Le débit reçu baisse alors que la charge prévue monte : la charge n'est plus réellement ouverte, et la règle « ≥ 1 % d'itérations perdues = run invalide » pénaliserait le banc d'essai plutôt que le système. Décision à prendre avant S2.
+- **Piège de lecture Grafana** : après la fin d'un run, les courbes k6 restent plates pendant environ 5 min. Ce n'est pas une mesure : Prometheus renvoie la dernière valeur reçue tant que la série n'a pas expiré.

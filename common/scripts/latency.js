@@ -1,7 +1,10 @@
 // Latences et débit d'un run, calculés depuis la base (mêmes requêtes pour sync/ et async/,
 // CLAUDE.md §6). Les commandes du run sont celles dont customer_id commence par « <RUN_ID>- ».
 //
-//   node common/scripts/latency.js --run <RUN_ID> [--out results/.../latency.json]
+//   node common/scripts/latency.js --run <RUN_ID> [--slice <secondes>] [--out results/.../latency.json]
+//
+// --slice N : découpe aussi le run en tranches de N secondes (selon received_at), pour lire
+// chaque palier d'une montée en charge séparément.
 //
 // Latences (en ms, depuis received_at = arrivée de la requête, cas C3) :
 //   acceptation  = accepted_at  − received_at  (paiement autorisé ; critère p95 < 1 s)
@@ -26,6 +29,38 @@ const percentiles = (col) => `
          max(extract(epoch FROM ${col} - received_at) * 1000) AS max
     FROM orders
    WHERE customer_id LIKE $1 AND ${col} IS NOT NULL`;
+
+// Par tranche de `seconds` depuis la première commande : débit reçu et accepté, latence
+// d'acceptation et de complétion, commandes restées non terminées (RECEIVED / ACCEPTED).
+const SLICES = `
+  WITH t AS (
+    SELECT floor(extract(epoch FROM received_at - min(received_at) OVER ()) / $2)::int * $2 AS start_s,
+           status, accepted_at, completed_at, received_at
+      FROM orders WHERE customer_id LIKE $1)
+  SELECT start_s,
+         count(*)::int AS received,
+         count(*) FILTER (WHERE accepted_at IS NOT NULL)::int AS accepted,
+         count(*) FILTER (WHERE status IN ('RECEIVED', 'ACCEPTED'))::int AS unfinished,
+         percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM accepted_at - received_at) * 1000)
+           FILTER (WHERE accepted_at IS NOT NULL) AS acceptance_p95,
+         percentile_cont(0.99) WITHIN GROUP (ORDER BY extract(epoch FROM accepted_at - received_at) * 1000)
+           FILTER (WHERE accepted_at IS NOT NULL) AS acceptance_p99,
+         percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM completed_at - received_at) * 1000)
+           FILTER (WHERE completed_at IS NOT NULL) AS completion_p95
+    FROM t GROUP BY start_s ORDER BY start_s`;
+
+export async function measureSlices(client, runId, seconds) {
+  const { rows } = await client.query(SLICES, [`${runId}-%`, seconds]);
+  return rows.map((r) => ({
+    startS: r.start_s,
+    receivedPerSecond: r.received / seconds,
+    acceptedPerSecond: r.accepted / seconds,
+    unfinished: r.unfinished,
+    acceptanceP95: r.acceptance_p95,
+    acceptanceP99: r.acceptance_p99,
+    completionP95: r.completion_p95,
+  }));
+}
 
 export async function measure(client, runId) {
   const pattern = `${runId}-%`;
@@ -73,20 +108,33 @@ function print(m) {
   for (const [stage, l] of Object.entries(m.latency)) {
     console.log(`  ${stage.padEnd(13)} ${String(l.n).padStart(6)} ${ms(l.p50)} ${ms(l.p95)} ${ms(l.p99)} ${ms(l.max)}`);
   }
+  if (m.slices) {
+    console.log(`\npar tranche de ${m.sliceSeconds} s (depuis la première commande ; la dernière tranche peut être partielle) :`);
+    console.log(`  ${'début'.padStart(6)} ${'reçu/s'.padStart(7)} ${'accepté/s'.padStart(10)} ${'non fini'.padStart(9)} ${'acc p95'.padStart(8)} ${'acc p99'.padStart(8)} ${'compl p95'.padStart(9)}`);
+    for (const t of m.slices) {
+      console.log(`  ${`${t.startS} s`.padStart(6)} ${t.receivedPerSecond.toFixed(1).padStart(7)} ${t.acceptedPerSecond.toFixed(1).padStart(10)} ${String(t.unfinished).padStart(9)} ${ms(t.acceptanceP95)} ${ms(t.acceptanceP99)} ${ms(t.completionP95).padStart(9)}`);
+    }
+  }
   const p95 = m.latency.acceptance.p95;
   if (p95 !== null) console.log(`\ncritère p95 d'acceptation < 1 s : ${p95 < 1000 ? 'respecté' : 'NON respecté'} (${Math.round(p95)} ms)`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { values: args } = parseArgs({ options: { run: { type: 'string' }, out: { type: 'string' } } });
+  const { values: args } = parseArgs({ options: { run: { type: 'string' }, out: { type: 'string' }, slice: { type: 'string' } } });
   if (!args.run) {
-    console.error('usage : node common/scripts/latency.js --run <RUN_ID> [--out <fichier.json>]');
+    console.error('usage : node common/scripts/latency.js --run <RUN_ID> [--slice <secondes>] [--out <fichier.json>]');
     process.exit(2);
   }
   let client;
   try {
     client = await connect();
     const m = await measure(client, args.run);
+    if (args.slice) {
+      const seconds = Number(args.slice);
+      if (!Number.isInteger(seconds) || seconds <= 0) throw new Error('--slice attend un nombre entier de secondes');
+      m.sliceSeconds = seconds;
+      m.slices = await measureSlices(client, args.run, seconds);
+    }
     if (m.total === 0) {
       console.error(`aucune commande pour le run « ${args.run} » : mesure inconclusive`);
       process.exitCode = 2;
