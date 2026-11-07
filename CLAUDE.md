@@ -20,33 +20,35 @@ Livrable terminal : mise à jour de `docs/ADR-001.md` (Status, Context, Architec
 
 **Annoncé (par le responsable)** : étapes 1 à 6 (socle, `sync/`, vérification d'invariant, `async/`, parité, traces) terminées ; étape en cours : **étape 7**, scénarios S1 à S5 (procédure : `poc-communication-etape7.md`).
 
-**Constaté dans le dépôt au 2026-11-02** (le code fait foi) : seul le socle existe. Ne présume pas que le reste est fait ; revérifie avant chaque étape et mets cette liste à jour.
+**Constaté dans le dépôt au 2026-11-07** (le code fait foi) : étapes 1 à 4 faites et vérifiées (socle, `sync/`, vérification d'invariants, `async/`) ; étapes 5 à 7 à faire. Ne présume pas que le reste est fait ; revérifie avant chaque étape et mets cette liste à jour.
 
 Présent :
 - `package.json` + lockfile dans `sync/`, `async/`, `common/` (ESM, Node >= 22, `.nvmrc` = 22), dépendances installées.
 - `common/infra/` : `docker-compose.yml` (projet `poc-obs` : Jaeger, OTel Collector, Prometheus, Grafana sur le réseau externe `poc-net`), `otel-collector.yml` (traces seulement → Jaeger), `prometheus.yml` (cibles `order:3000` … `notification:3004`, `rabbitmq:15692`). Vérifié le 2026-11-02 : les 4 conteneurs `poc-obs` tournent sur `poc-net` et répondent (Jaeger, Prometheus, Grafana, Collector OTLP) ; les cibles Prometheus sont `down` faute de services.
 - `common/db/` : `schema.sql` (10 tables), `seed.sql` (réexécutable), `postgres.compose.yml` (PostgreSQL 17.11 figé, inclus par `sync/docker-compose.yml`, port hôte 55432, user/mdp/base `poc`). Vérifié le 2026-11-02 : chargement, rejeu idempotent, requête d'invariant.
-- `sync/` (étape 2, vérifiée le 2026-11-02) : les 5 services (`lib/`, `services/*/{domain,server}.js`, `services/order/workflow.js`), `Dockerfile`, `docker-compose.yml` (projet `poc-sync`, image construite par `payment` puis réutilisée), `npm test` (10 tests `node:test` sur `domain.js`). Parcours vérifiés à la main : confirmée, paiement refusé, stock insuffisant avec void, requêtes invalides, panne d'Inventory (`502`, commande bloquée `ACCEPTED`). Prometheus voit les 5 cibles `up`, Jaeger reçoit des traces propagées entre services avec les requêtes pg.
+- `sync/` (étape 2, vérifiée le 2026-11-02) : les 5 services (`lib/`, `services/*/{domain,server}.js`, `services/order/workflow.js`), `Dockerfile`, `docker-compose.yml` (projet `poc-sync`, image construite par `payment` puis réutilisée), `npm test` (12 tests `node:test` sur `domain.js`). Parcours vérifiés à la main : confirmée, paiement refusé, stock insuffisant avec void, requêtes invalides, panne d'Inventory (`502`, commande bloquée `ACCEPTED`). Prometheus voit les 5 cibles `up`, Jaeger reçoit des traces propagées entre services avec les requêtes pg.
 - `docs/invariants.md` : I1 (énoncé) et règles dérivées I2–I11 (propositions).
 - `common/` (étape 3, vérifiée le 2026-11-03) : `scripts/reset.js` (`npm run reset`), `scripts/verify-invariants.js` + `scripts/invariants.js` (`npm run verify [-- --out <fichier>]`, codes 0/1/2), `test/invariants.test.js` (`npm test`, 14 tests, une violation injectée par règle, en transaction annulée). Colonne `products.initial_stock` ajoutée (I6) ; une base créée avant doit être remise à zéro avec `npm run reset`.
 - Charge et mesure (2026-11-07) : `common/benchmarks/place-order.js` (k6 `grafana/k6:2.3.0` figé, modèle ouvert `constant-arrival-rate`, mélange D12, `RUN_ID` en préfixe des `customerId`), `common/scripts/latency.js` (statuts, débit, p50/p95/p99 d'acceptation, confirmation, complétion depuis la base), Prometheus en remote write (k6 `-o experimental-prometheus-rw`, étiquette `testid`), tableau Grafana « POC — Run k6 et services ». Commande complète : README. Essai à blanc `dry-sync-01` (100 cmd/s, 1 min, non cité dans l'ADR) : valide, invariants OK, p95 d'acceptation 72 ms ; les 10 premières secondes sont 3× plus lentes (connexions froides, C2) : préchauffage indispensable.
+- `async/` (étape 4, vérifiée le 2026-11-07, V1–V16 de `docs/async-mise-en-place.md`) : RabbitMQ 4.3.6 figé (topologie déclarée par `async/rabbitmq/definitions.json`, 2 CPU / 1 Go), `lib/` (`broker.js` confirmations + `prefetch` 64 + `noDelay`, `outbox.js` publication après commit + balayage de secours non tracé, `consumer.js` idempotence `processed_events` + budget 0 vers DLQ, `service.js`), 5 services (copies identiques des `domain.js`, `services/order/handlers.js` « noter le fait, puis décider »), `POST /orders` → `202`, `npm test` (5 tests). Vérifié : parcours, compensation, panne de Payment (commandes terminées au redémarrage), doublon ignoré, outbox vide et DLQ vides après drainage, trace unique à travers les 5 services, `verify` OK, essai à blanc `dry-async-01` (100 cmd/s, p95 d'acceptation 125 ms), `reset` qui purge les files. `async/` a sa propre base (volume distinct de `sync/`).
+- `docs/async-mise-en-place.md` : conception validée (AS1–AS11), plan, étapes de validation V1–V16 et constats de mise en œuvre.
 - `docs/ADR-001.md` : version initiale (2026-11-07), décision candidate ADOPT EVENT-DRIVEN, figée ; sections finales vides.
 - `docs/decisions-conception.md` : décisions DB1–DB12 (base), SV1–SV13 (services synchrones), VI1–VI7 (vérification des invariants), avec leur source.
 
 Absent (dossiers vides ou fichiers manquants) :
-- tout `async/` (services, `lib/`, `docker-compose.yml`) ; la CLI `poc` ;
-- `common/scripts/run-scenario.js` et `check-parity.js` ; le profil de montée de S2 dans k6 (seul `constant-arrival-rate` existe) ;
+- la CLI `poc` ;
+- `common/scripts/run-scenario.js` et `check-parity.js` ; la forme définitive de S2 (D8, D13 ; k6 a déjà les profils `constant` et `steps`) ;
 - PoC Plan, Architecture Analysis, matrice de décision (les hypothèses et la traçabilité sont dans `docs/hypotheses-assumption.md`) ;
 - `poc-communication-etape7.md` ;
 - les crochets de l'étape 7 : `POST /admin/chaos`, `Idempotency-Key`, métriques métier ; les noms de span HTTP n'incluent pas la route (`POST` seul).
 
 **Défaut de mesure corrigé (2026-11-03)** : `received_at` était écrit à l'INSERT (`now()`), après l'attente du pool et la lecture des prix. Il vaut désormais l'instant d'arrivée de la requête (hook `onRequest` de `POST /orders`), passé à `createOrder`, qui l'exige. `async/` doit faire de même côté transport. Détail : `docs/cas-de-comprehension.md`, C3.
 
-Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Dans la section 9, fonctionnent : les deux premières commandes, `docker compose up -d --build` dans `sync/`, `reset.js` et `verify-invariants.js`.
+Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Dans la section 9, fonctionnent : les deux premières commandes, `docker compose up -d --build` dans `sync/` et `async/`, `reset.js` et `verify-invariants.js`.
 
 Autres écarts :
 - Le dépôt s'appelle `poc-projet-01`, pas `poc-communication`.
-- Les images de `common/infra/docker-compose.yml` sont figées (tag + digest) depuis le 2026-11-02 : Jaeger 1.76.0, Collector contrib 0.164.0, Prometheus v3.15.1, Grafana 13.3.0. Ne pas revenir à `:latest`. Jaeger v1 est déprécié (successeur : `jaegertracing/jaeger` v2) ; une migration changerait l'outillage entre runs, à faire avant les mesures ou pas du tout.
+- Les images de `common/infra/docker-compose.yml` sont figées (tag + digest) depuis le 2026-11-02 : Jaeger 1.76.0, Collector contrib 0.164.0, Prometheus v3.15.1, Grafana 13.3.0. Ne pas revenir à `:latest`. Jaeger v1 est déprécié (successeur : `jaegertracing/jaeger` v2) ; une migration changerait l'outillage entre runs, à faire avant les mesures ou pas du tout. Jaeger est plafonné à 20 000 traces en mémoire et 1 Go depuis le 2026-11-07 (il avait été tué faute de mémoire, M4 de `docs/async-mise-en-place.md`).
 - Grafana est configuré par fichiers (`common/infra/grafana/provisioning/`) : sources `Prometheus` (uid `prometheus`, par défaut) et `Jaeger` (uid `jaeger`) ; tout JSON déposé dans `common/infra/grafana/dashboards/` est chargé dans le dossier « POC ». Grafana n'a pas de volume de données : ce qui est fait dans l'interface est perdu à la recréation du conteneur, donc tout tableau de bord doit vivre en JSON dans le dépôt (exporté depuis l'UI si besoin).
 
 ## 3. Structure

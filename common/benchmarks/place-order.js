@@ -1,4 +1,5 @@
 // Charge Place Order, identique pour sync/ et async/ (règle d'équité : même charge k6).
+// Réponse attendue : 201 en sync/, 202 en async/ (D4).
 // Modèle ouvert (constant-arrival-rate) : k6 envoie RATE commandes/s quel que soit le temps
 // de réponse ; un système saturé ne reçoit donc pas moins de requêtes (sinon la saturation
 // serait masquée). Les itérations que k6 ne peut pas lancer faute de VU libre sont comptées
@@ -98,5 +99,6 @@ export default function () {
     headers: { 'content-type': 'application/json' },
     tags: { name: 'POST /orders' },
   });
-  check(res, { 'status 201': (r) => r.status === 201 });
+  // sync/ répond 201 (workflow terminé), async/ répond 202 (commande reçue, D4).
+  check(res, { 'status 201 (sync) ou 202 (async)': (r) => r.status === 201 || r.status === 202 });
 }

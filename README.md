@@ -93,6 +93,23 @@ docker compose -f sync/docker-compose.yml down -v
 docker compose -f sync/docker-compose.yml up -d --wait
 ```
 
+### 6. Démarrer la variante asynchrone (à la place de la synchrone)
+
+Arrêter d'abord `sync/` (mêmes ports), puis démarrer `async/` :
+
+```bash
+docker compose -f sync/docker-compose.yml down
+docker compose -f async/docker-compose.yml up -d --build --wait
+```
+
+Démarre PostgreSQL, RabbitMQ et les 5 services. `async/` a **sa propre base** (volume distinct de celui de `sync/`), au même port 55432 : `reset`, `verify` et `latency.js` s'appliquent au projet qui tourne.
+
+RabbitMQ :
+- interface d'administration : http://localhost:15672 (`poc` / `poc`) ; les compteurs des files se rafraîchissent toutes les 5 s environ ;
+- topologie déclarée au démarrage par `async/rabbitmq/definitions.json` : échange `orders` (topic), une file par service, une file `<service>.dlq` par service pour les messages en échec.
+
+Conception et étapes de validation : `docs/async-mise-en-place.md`.
+
 ## Passer une commande
 
 ```bash
@@ -107,15 +124,19 @@ curl -X POST localhost:3000/orders -H 'content-type: application/json' -d '{
 
 Forme de l'énoncé : `items` est une liste de SKU et `quantity` s'applique à chaque article (ici 2 × SKU-001 et 2 × SKU-003).
 
-Réponse attendue : `201` avec `"status":"CONFIRMED","completed":true`. Suivre la commande : `curl localhost:3000/orders/<orderId>`.
+Réponse attendue :
+- **sync** : `201` avec `"status":"CONFIRMED","completed":true` (la réponse arrive après tout le workflow) ;
+- **async** : `202` avec `"status":"RECEIVED"` (la commande est enregistrée ; la suite se fait par événements).
+
+Suivre la commande : `curl localhost:3000/orders/<orderId>` (en async, `CONFIRMED` et `completedAt` apparaissent environ 100 à 300 ms plus tard).
 
 | Pour obtenir | Modifier la requête |
 |---|---|
 | un paiement refusé (`REJECTED`, `PAYMENT_DECLINED`) | `"cardToken": "tok_declined"` |
 | un stock insuffisant (`REJECTED`, `INSUFFICIENT_STOCK`, paiement annulé) | `"items": ["SKU-LOW"], "quantity": 51` |
-| une panne de dépendance (`502`, commande bloquée en `ACCEPTED`) | arrêter Inventory avant : `docker compose -f sync/docker-compose.yml stop inventory` (puis `start inventory`) |
+| une panne de dépendance | arrêter un service avant : `docker compose -f <projet>/docker-compose.yml stop payment` (puis `start payment`). En sync : `502`, commande bloquée. En async : `202`, commande `RECEIVED` tant que Payment est arrêté, puis terminée toute seule à son redémarrage. |
 
-Tests unitaires : `(cd sync && npm test)`.
+Tests unitaires : `(cd sync && npm test)` et `(cd async && npm test)`.
 
 ## Vérifier les invariants et remettre à zéro
 
@@ -127,7 +148,7 @@ Les invariants (I1 à I11, `docs/invariants.md`) se vérifient en une commande, 
 
 Le rapport sépare **sûreté** (I1–I9, ne doit jamais arriver) et **vivacité** (I10–I11, doit finir par arriver), avec les commandes en infraction. Code de sortie : `0` tout est respecté, `1` au moins une violation (un résultat à documenter, pas une erreur), `2` vérification impossible ou base vide. Pour garder une trace : `(cd common && npm run verify -- --out ../results/essai/invariants.json)`.
 
-Remettre la base dans son état de départ (vide les commandes, remet le stock), sans redémarrer PostgreSQL :
+Remettre le POC dans son état de départ (vide les commandes, remet le stock et, si `async/` tourne, purge toutes les files RabbitMQ), sans redémarrer les conteneurs :
 
 ```bash
 (cd common && npm run reset)
@@ -205,12 +226,13 @@ Prometheus est déjà configuré pour collecter les métriques des services sur 
 
 ```
 sync/      variante synchrone : services/<nom>/{domain,server}.js, lib/, test/, Dockerfile, docker-compose.yml
-async/     variante asynchrone (services/, lib/)
+async/     variante asynchrone : services/<nom>/{domain,server}.js, lib/ (broker, outbox, consommateur), rabbitmq/, test/
 common/    éléments partagés, hors comparaison
   infra/     monitoring : Jaeger, OTel Collector, Prometheus, Grafana
   db/        schéma, données de départ, conteneur PostgreSQL commun
-  benchmarks/, scripts/   (à venir)
-docs/      decisions-conception.md (choix et leur source), invariants.md
+  benchmarks/  charge k6 (place-order.js)
+  scripts/     reset, verify-invariants, latency
+docs/      ADR-001, hypothèses, décisions de conception, invariants, mise en place async, cas de compréhension
 CLAUDE.md  règles du POC, état d'avancement réel
 ```
 

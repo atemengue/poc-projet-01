@@ -177,6 +177,12 @@ export async function markCompleted(db, orderId) {
 
 // ------------------------------------------------------------------ lecture
 
+/** Adresse de livraison de la commande (données d'Order), transmise à Shipping. */
+export async function getShippingAddress(db, orderId) {
+  const { rows } = await db.query('SELECT shipping_address FROM orders WHERE id = $1', [orderId]);
+  return rows[0]?.shipping_address ?? null;
+}
+
 export async function getOrder(db, orderId) {
   const { rows } = await db.query(
     `SELECT o.id, o.customer_id, o.status, o.payment_status, o.stock_status, o.rejection_reason,

@@ -24,7 +24,7 @@ export async function markProcessed(client, consumer, eventId) {
 
 /**
  * Traite un événement (hors broker, pour pouvoir le tester).
- * handlers : { [type]: { latency?: () => Promise, handle: (client, event, emit) => Promise } }
+ * handlers : { [type]: { latency?: (event) => Promise, handle: (client, event, emit) => Promise } }
  * emit(type, payload) écrit un événement de la même commande dans l'outbox.
  * Retourne { status: 'ignored' | 'duplicate' | 'processed', emitted: eventId[] }.
  */
@@ -32,7 +32,7 @@ export async function processEvent({ consumer, handlers, event, transaction = wi
   const handler = handlers[event.type];
   if (!handler) return { status: 'ignored', emitted: [] };
 
-  await handler.latency?.();
+  await handler.latency?.(event);
   return transaction(async (client) => {
     if (!(await markProcessed(client, consumer, event.eventId))) {
       return { status: 'duplicate', emitted: [] };

@@ -2,7 +2,7 @@
 
 > Conception discutée et validée point par point le 2026-11-07, avant tout code (méthodologie : `docs/methodologie.md`).
 > Sources : **Énoncé**, **Responsable** (décision du responsable du POC), **Proposition** (proposée par Claude). « Validée » = acceptée par le responsable le 2026-11-07.
-> Rien n'est encore implémenté dans `async/`.
+> Implémenté et vérifié le 2026-11-07 (V1 à V16 passées, §7).
 
 ## 1. Point de départ
 
@@ -118,3 +118,20 @@ docker compose -f async/docker-compose.yml up -d --build --wait
 | V16 | `reset` | Vide la base **et** purge les files RabbitMQ |
 
 Chaque vérification surprenante devient un cas de compréhension (`docs/cas-de-comprehension.md`).
+
+## 7. Constats de mise en œuvre (2026-11-07)
+
+Toutes les vérifications V1 à V16 sont passées. Écarts et corrections apportés en route :
+
+| # | Constat | Correction | Source |
+|---|---|---|---|
+| M1 | Shipping a besoin de l'adresse de livraison, qui appartient à Order. | `getShippingAddress` ajoutée au `domain.js` d'Order, **dans les deux copies** (parité ; inutilisée par `sync/`). Order la transmet dans `OrderConfirmed`. Les articles voyagent de `OrderCreated` à `PaymentAuthorized` (Payment les retransmet à Inventory). | Proposition |
+| M2 | Chaque publication prenait environ 40 ms chez Inventory, Shipping et Notification (vu dans Jaeger) : algorithme de Nagle combiné à l'ACK retardé de TCP. Une commande mettait 240 ms à se terminer au lieu d'environ 110 ms. | Connexion AMQP en `noDelay` (`async/lib/broker.js`). Cas de compréhension C6. | Proposition |
+| M3 | Le balayage de secours de l'outbox créait une trace racine par seconde et par service, qui noyait les traces des commandes. | Balayage exécuté hors trace (`suppressTracing`, dépendance `@opentelemetry/core` ajoutée) ; une ligne publiée par le balayage garde sa trace (contexte restauré depuis `outbox.headers`). | Proposition |
+| M4 | Jaeger (stockage en mémoire sans limite) a été tué faute de mémoire à 18 h 53, avant `dry-sync-02` ; le Collector, ne pouvant plus exporter, avait sa file pleine. | Jaeger plafonné (`MEMORY_MAX_TRACES=20000`, 1 Go) ; Collector redémarré. Les traces de `dry-sync-02` sont perdues ; ses mesures (base, k6) restent valables. | Proposition |
+| M5 | Le contrôle k6 attendait `201` ; `async/` répond `202` (D4). | Le contrôle accepte `201` ou `202`. | Proposition |
+| M6 | `POST /orders` répond avant la publication de `OrderCreated` (la commande et l'événement sont déjà durables dans l'outbox). | Choix assumé : la latence de réponse HTTP (H3c) ne contient pas l'attente de la confirmation du broker. Un échec de publication est rattrapé par le balayage. | Proposition |
+| M7 | `reset` doit vider les files avant la base : un message restant recréerait des lignes après le vidage. | `reset.js` purge les files RabbitMQ (API d'administration) puis vide la base ; si RabbitMQ ne répond pas (projet `sync/`), la purge est sautée. | Proposition |
+| M8 | Les compteurs de l'interface RabbitMQ (et de son API) se rafraîchissent toutes les 5 s environ. | Rien à corriger : lire l'état réel en base ou attendre le rafraîchissement. | Constat |
+
+Premier repère (essai à blanc `dry-async-01`, 100 cmd/s pendant 1 min, **jamais cité dans l'ADR**) : 6 001 commandes, drainage en moins de 1 s, `verify` OK, p95 d'acceptation 125 ms (contre 72 ms pour `dry-sync-01`), avec des pics ponctuels de p95 vers 20 s et 50 s, encore inexpliqués.

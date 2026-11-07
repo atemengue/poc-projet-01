@@ -11,6 +11,7 @@
 // une même ligne n'est jamais publiée deux fois par elles.
 import { randomUUID } from 'node:crypto';
 import { context, propagation, ROOT_CONTEXT } from '@opentelemetry/api';
+import { suppressTracing } from '@opentelemetry/core';
 import { withTransaction } from './db.js';
 import { logger } from './logger.js';
 
@@ -82,7 +83,10 @@ export function startSweeper(broker) {
     if (running) return;
     running = true;
     try {
-      const n = await context.with(ROOT_CONTEXT, () => publishLocked(
+      // Hors trace : sinon chaque passage (une requête par seconde et par service) crée une
+      // trace racine qui noie celles des commandes dans Jaeger. Une ligne réellement publiée par
+      // le balayage garde sa trace : publishRow restaure le contexte enregistré dans l'outbox.
+      const n = await context.with(suppressTracing(ROOT_CONTEXT), () => publishLocked(
         broker,
         `SELECT ${COLUMNS} FROM outbox
           WHERE published_at IS NULL AND created_at < now() - make_interval(secs => $1)

@@ -16,7 +16,10 @@ const PREFETCH = Number(process.env.PREFETCH ?? 64);
  * avec prefetch borné et acquittement manuel.
  */
 export async function connectBroker(url = process.env.AMQP_URL) {
-  const connection = await amqp.connect(url);
+  // noDelay : désactive l'algorithme de Nagle. Sans cela, une publication suivie de l'attente de
+  // sa confirmation subit ~40 ms (Nagle + ACK retardé), ce qui ajouterait un délai artificiel à
+  // chaque événement et fausserait la comparaison des latences (constaté dans Jaeger, V13).
+  const connection = await amqp.connect(url, { noDelay: true });
   let closing = false;
 
   // Une perte de connexion inattendue arrête le service : pas de reconnexion automatique

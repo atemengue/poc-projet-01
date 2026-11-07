@@ -316,3 +316,35 @@ Paliers du profil `steps` : 30 s à 50 cmd/s, puis 1 min à 100, 200, 300, 400 e
 - **Équité** : le goulot est dans Order parce qu'il orchestre. En chorégraphie, ce travail sera réparti entre les services ; une partie de l'écart mesuré viendra donc de l'orchestration, pas seulement de la communication (menace à la validité, `docs/hypotheses-assumption.md` §7).
 - **Protocole** : au-delà de la saturation, le plafond de VUs bride k6 (loi de Little : 300 cmd/s × 10 s ≈ 3 000 requêtes en vol). Le débit reçu baisse alors que la charge prévue monte : la charge n'est plus réellement ouverte, et la règle « ≥ 1 % d'itérations perdues = run invalide » pénaliserait le banc d'essai plutôt que le système. Décision à prendre avant S2.
 - **Piège de lecture Grafana** : après la fin d'un run, les courbes k6 restent plates pendant environ 5 min. Ce n'est pas une mesure : Prometheus renvoie la dernière valeur reçue tant que la série n'a pas expiré.
+
+---
+
+## C6 — 40 ms perdus à chaque publication (algorithme de Nagle)
+
+*Observé le 2026-11-07, variante asynchrone, dans Jaeger (vérification V13). Corrigé le même jour.*
+
+**Question** : pourquoi, dans la trace d'une commande, chaque publication d'événement par Inventory, Shipping et Notification prenait-elle environ 41 ms, alors qu'elle prenait 1 ms chez Order et Payment ?
+
+**Explication simple** : pour économiser le réseau, TCP regroupe les petits envois : tant que l'envoi précédent n'a pas été acquitté, il retient le suivant (algorithme de Nagle). De son côté, le destinataire n'acquitte pas tout de suite : il attend jusqu'à environ 40 ms au cas où il aurait une réponse à renvoyer en même temps (ACK retardé). Quand un service publie un message puis attend la confirmation de RabbitMQ, les deux mécanismes s'attendent l'un l'autre : 40 ms de perdus par événement. Une commande traverse 6 événements : sa complétion passait de 113 ms à 240 ms. Ce n'est pas un coût du style événementiel, c'est un réglage réseau.
+
+**Correctif** : la connexion AMQP est ouverte avec `noDelay: true` (`async/lib/broker.js`), qui désactive Nagle. Côté `sync/`, le client HTTP de Node (undici) désactive déjà Nagle par défaut : les deux variantes sont maintenant à égalité.
+
+**Rejouer** (pile `async/` démarrée) :
+
+```bash
+curl -s -X POST localhost:3000/orders -H 'content-type: application/json' \
+  -d '{"customerId":"cas6","items":["SKU-005"],"quantity":1,"paymentInformation":{"cardToken":"tok_ok"},"shippingAddress":{"city":"Montreal"}}'
+```
+
+Puis Jaeger (http://localhost:16686) → service `order`, opération `POST` → **Find Traces** → ouvrir la trace la plus récente. Pour voir le défaut, remplacer `{ noDelay: true }` par `{}` dans `async/lib/broker.js`, reconstruire (`docker compose -f async/docker-compose.yml up -d --build --wait`) et recommencer.
+
+**Observer** :
+
+| | Avec le défaut | Corrigé |
+|---|---|---|
+| `publish orders` chez Inventory, Shipping, Notification | ≈ 41 ms chacun | < 1 ms |
+| Fin du traitement (dernier `order process`) | ≈ 240 ms | ≈ 113 ms |
+
+**Pourquoi ça compte** :
+- **Équité (H2)** : sans le correctif, `async/` aurait payé environ 120 ms de plus par commande à cause d'un réglage réseau, pas du style. H2 (latence de complétion) aurait été biaisée en faveur du synchrone.
+- **Méthode** : ce défaut n'apparaît ni dans les tests ni dans les invariants ; seule la lecture d'une trace l'a révélé. Regarder une trace complète avant de mesurer fait partie de « éprouver l'existant ».
