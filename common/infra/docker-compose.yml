@@ -2,10 +2,11 @@ name: poc-obs
 services:
   jaeger:
     image: jaegertracing/all-in-one:1.76.0@sha256:ab6f1a1f0fb49ea08bcd19f6b84f6081d0d44b364b6de148e1798eb5816bacac
-    # Stockage en mémoire plafonné : sans limite, Jaeger a été tué faute de mémoire (OOMKilled)
-    # après l'essai dry-sync-01. Au-delà de MEMORY_MAX_TRACES, les plus anciennes sont oubliées.
-    environment: [COLLECTOR_OTLP_ENABLED=true, MEMORY_MAX_TRACES=20000]
-    mem_limit: 1g
+    # Stockage en mémoire plafonné (C-2) : sans limite, puis à 20 000 traces / 1 Go, Jaeger a été
+    # tué faute de mémoire (M4, M9 de docs/async-mise-en-place.md). Une commande async/ fait
+    # environ 100 spans : 5 000 traces tiennent dans 1,5 Go. Au-delà, les plus anciennes sont oubliées.
+    environment: [COLLECTOR_OTLP_ENABLED=true, MEMORY_MAX_TRACES=5000]
+    mem_limit: 1536m
     ports: ["16686:16686"]
     networks: [poc-net]
   otel-collector:

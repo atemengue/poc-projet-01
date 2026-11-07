@@ -142,7 +142,7 @@ Notées le 2026-11-07, à la suite de M9. À appliquer avant les mesures, identi
 | # | Correction | Fichiers | Effet attendu | État |
 |---|---|---|---|---|
 | C-1 | Ne plus tracer `/health` et `/metrics` (option `ignoreIncomingRequestHook` de l'instrumentation HTTP). | `sync/lib/telemetry.js`, `async/lib/telemetry.js` (même changement) | Supprime le bruit permanent ; Jaeger ne contient que des commandes | À faire |
-| C-2 | Jaeger : `MEMORY_MAX_TRACES=5000`, `mem_limit` 1,5 Go. | `common/infra/docker-compose.yml` | Assez de traces pour inspecter un essai ; Jaeger ne tombe plus | À faire |
+| C-2 | Jaeger : `MEMORY_MAX_TRACES=5000`, `mem_limit` 1,5 Go. | `common/infra/docker-compose.yml` | Assez de traces pour inspecter un essai ; Jaeger ne tombe plus | **Appliquée le 2026-11-07** |
 | C-3 | Échantillonner les traces pendant les runs de charge (par exemple 10 %, `OTEL_TRACES_SAMPLER=parentbased_traceidratio`), même taux pour les deux variantes. | `docker-compose.yml` des deux projets | Tracer 100 % des commandes coûte du CPU aux services (C5) et pèse sur les mesures ; le taux de traces complètes de H5 se mesurerait alors sur l'échantillon | À décider (D15) |
 | C-4 | Vérifier que la pile d'observabilité tourne avant chaque run (Jaeger, Collector, Prometheus) et relancer le Collector si Jaeger a été recréé (sa file d'export peut rester pleine, M4). | protocole de run (`run-scenario.js`, étape 7) | Un run n'est pas mené avec une observabilité morte sans qu'on le sache | À faire à l'étape 7 |
 

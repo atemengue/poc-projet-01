@@ -156,6 +156,16 @@ Remettre le POC dans son état de départ (vide les commandes, remet le stock et
 
 Tests du vérificateur (une violation injectée par règle, sans modifier la base) : `(cd common && npm test)`.
 
+## Vérifier la parité entre sync et async
+
+La comparaison n'est valable que si seul le style de communication diffère. Un contrôle le vérifie :
+
+```bash
+(cd common && npm run parity)
+```
+
+Il compare les cinq `services/<nom>/domain.js` des deux projets (empreinte SHA-256, première ligne qui diffère) et leur configuration Compose (ressources, pool, latence simulée, `PREFETCH` = `OUTBOUND_CONNECTIONS`). Code de sortie : `0` parité respectée, `1` divergence (à corriger, ou à documenter dans l'ADR si elle est voulue), `2` contrôle impossible. Pas besoin que les piles tournent ; Docker doit être disponible.
+
 ## Lancer une charge (k6) et mesurer les latences
 
 k6 tourne dans Docker sur `poc-net` (image figée). Chaque run a un identifiant (`RUN`) : il préfixe les `customerId` (pour retrouver les commandes en base) et étiquette les métriques k6 dans Prometheus (`testid`).
@@ -231,7 +241,7 @@ common/    éléments partagés, hors comparaison
   infra/     monitoring : Jaeger, OTel Collector, Prometheus, Grafana
   db/        schéma, données de départ, conteneur PostgreSQL commun
   benchmarks/  charge k6 (place-order.js)
-  scripts/     reset, verify-invariants, latency
+  scripts/     reset, verify-invariants, latency, check-parity
 docs/      ADR-001, hypothèses, décisions de conception, invariants, mise en place async, cas de compréhension
 CLAUDE.md  règles du POC, état d'avancement réel
 ```

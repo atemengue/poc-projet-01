@@ -6,7 +6,8 @@
     "test": "node --test",
     "reset": "node scripts/reset.js",
     "verify": "node scripts/verify-invariants.js",
-    "latency": "node scripts/latency.js"
+    "latency": "node scripts/latency.js",
+    "parity": "node scripts/check-parity.js"
   },
   "keywords": [],
   "author": "",
