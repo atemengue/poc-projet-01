@@ -10,6 +10,7 @@
 // Une erreur de traitement envoie le message en DLQ sans nouvelle tentative (budget 0, AS5).
 import { withTransaction } from './db.js';
 import { logger } from './logger.js';
+import { trace } from '@opentelemetry/api';
 import { addEvent, publishEvents } from './outbox.js';
 
 /** Enregistre l'événement comme traité. false si ce consommateur l'a déjà traité (doublon). */
@@ -60,6 +61,9 @@ export async function startConsumer(broker, { queue, consumer, handlers }) {
       return;
     }
     const log = logger.child({ orderId: event.orderId, eventId: event.eventId, type: event.type });
+    // Span de traitement (créé par l'instrumentation amqplib) : commande et type d'événement,
+    // pour retrouver la trace d'une commande (Tags order.id=<uuid>) et lire la chaîne.
+    trace.getActiveSpan()?.setAttributes({ 'order.id': event.orderId, 'event.type': event.type });
 
     let result;
     try {

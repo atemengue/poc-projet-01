@@ -20,7 +20,7 @@ Livrable terminal : mise à jour de `docs/ADR-001.md` (Status, Context, Architec
 
 **Annoncé (par le responsable)** : étapes 1 à 6 (socle, `sync/`, vérification d'invariant, `async/`, parité, traces) terminées ; étape en cours : **étape 7**, scénarios S1 à S5 (procédure : `poc-communication-etape7.md`).
 
-**Constaté dans le dépôt au 2026-11-07** (le code fait foi) : étapes 1 à 5 faites et vérifiées (socle, `sync/`, vérification d'invariants, `async/`, parité) ; étapes 6 et 7 à faire. Ne présume pas que le reste est fait ; revérifie avant chaque étape et mets cette liste à jour.
+**Constaté dans le dépôt au 2026-11-07** (le code fait foi) : étapes 1 à 6 faites et vérifiées (socle, `sync/`, vérification d'invariants, `async/`, parité, traces) ; étape 7 à faire. Ne présume pas que le reste est fait ; revérifie avant chaque étape et mets cette liste à jour.
 
 Présent :
 - `package.json` + lockfile dans `sync/`, `async/`, `common/` (ESM, Node >= 22, `.nvmrc` = 22), dépendances installées.
@@ -32,6 +32,7 @@ Présent :
 - Charge et mesure (2026-11-07) : `common/benchmarks/place-order.js` (k6 `grafana/k6:2.3.0` figé, modèle ouvert `constant-arrival-rate`, mélange D12, `RUN_ID` en préfixe des `customerId`), `common/scripts/latency.js` (statuts, débit, p50/p95/p99 d'acceptation, confirmation, complétion depuis la base), Prometheus en remote write (k6 `-o experimental-prometheus-rw`, étiquette `testid`), tableau Grafana « POC — Run k6 et services ». Commande complète : README. Essai à blanc `dry-sync-01` (100 cmd/s, 1 min, non cité dans l'ADR) : valide, invariants OK, p95 d'acceptation 72 ms ; les 10 premières secondes sont 3× plus lentes (connexions froides, C2) : préchauffage indispensable.
 - `async/` (étape 4, vérifiée le 2026-11-07, V1–V16 de `docs/async-mise-en-place.md`) : RabbitMQ 4.3.6 figé (topologie déclarée par `async/rabbitmq/definitions.json`, 2 CPU / 1 Go), `lib/` (`broker.js` confirmations + `prefetch` 64 + `noDelay`, `outbox.js` publication après commit + balayage de secours non tracé, `consumer.js` idempotence `processed_events` + budget 0 vers DLQ, `service.js`), 5 services (copies identiques des `domain.js`, `services/order/handlers.js` « noter le fait, puis décider »), `POST /orders` → `202`, `npm test` (5 tests). Vérifié : parcours, compensation, panne de Payment (commandes terminées au redémarrage), doublon ignoré, outbox vide et DLQ vides après drainage, trace unique à travers les 5 services, `verify` OK, essai à blanc `dry-async-01` (100 cmd/s, p95 d'acceptation 125 ms), `reset` qui purge les files. `async/` a sa propre base (volume distinct de `sync/`).
 - Parité (étape 5, vérifiée le 2026-11-07) : `common/scripts/check-parity.js` (`cd common && npm run parity [-- --out <fichier>]`, codes 0/1/2) compare l'empreinte SHA-256 des cinq `domain.js` et la configuration Compose (cpus, mem_limit, `PG_POOL_MAX`, `LOG_LEVEL`, `SIMULATED_LATENCY_MS`, `PREFETCH` async = `OUTBOUND_CONNECTIONS` sync) ; 7 tests dans `common/test/parity.test.js`. État au 2026-11-07 : parité respectée (5 fichiers identiques, 30/30 contrôles de configuration).
+- Traces (étape 6, vérifiée le 2026-11-07 dans les deux variantes) : spans HTTP serveur nommés par la route (`POST /orders`, `GET /orders/:id`, attribut `http.route`) ; attribut `order.id` sur la requête HTTP de chaque service (sync) et sur chaque traitement d'événement (async, avec `event.type`), pour retrouver la trace d'une commande (Jaeger : Tags `order.id=<uuid>`) ; `/health` et `/metrics` ne sont plus tracés (C-1) ; log `order received` (orderId + traceId) en async. Les spans HTTP client de `sync/` restent nommés `POST` (convention OpenTelemetry). `@opentelemetry/api` ajoutée à `sync/`.
 - `docs/async-mise-en-place.md` : conception validée (AS1–AS11), plan, étapes de validation V1–V16 et constats de mise en œuvre.
 - `docs/ADR-001.md` : version initiale (2026-11-07), décision candidate ADOPT EVENT-DRIVEN, figée ; sections finales vides.
 - `docs/decisions-conception.md` : décisions DB1–DB12 (base), SV1–SV13 (services synchrones), VI1–VI7 (vérification des invariants), avec leur source.
@@ -41,7 +42,7 @@ Absent (dossiers vides ou fichiers manquants) :
 - `common/scripts/run-scenario.js` ; la forme définitive de S2 (D8, D13 ; k6 a déjà les profils `constant` et `steps`) ;
 - PoC Plan, Architecture Analysis, matrice de décision (les hypothèses et la traçabilité sont dans `docs/hypotheses-assumption.md`) ;
 - `poc-communication-etape7.md` ;
-- les crochets de l'étape 7 : `POST /admin/chaos`, `Idempotency-Key`, métriques métier ; les noms de span HTTP n'incluent pas la route (`POST` seul).
+- les crochets de l'étape 7 : `POST /admin/chaos`, `Idempotency-Key`, métriques métier ; le script de mesure de la part de traces complètes (H5).
 
 **Défaut de mesure corrigé (2026-11-03)** : `received_at` était écrit à l'INSERT (`now()`), après l'attente du pool et la lecture des prix. Il vaut désormais l'instant d'arrivée de la requête (hook `onRequest` de `POST /orders`), passé à `createOrder`, qui l'exige. `async/` doit faire de même côté transport. Détail : `docs/cas-de-comprehension.md`, C3.
 

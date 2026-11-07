@@ -1,4 +1,4 @@
-import { createServer, start } from '../../lib/server.js';
+import { createServer, start, tagOrder } from '../../lib/server.js';
 import { pool, withTransaction } from '../../lib/db.js';
 import { UpstreamError } from '../../lib/http-client.js';
 import * as domain from './domain.js';
@@ -27,6 +27,7 @@ app.post('/orders', { onRequest: markReceived }, async (req, reply) => {
 
   const order = { ...value, ...priced, receivedAt };
   const orderId = await withTransaction((client) => domain.createOrder(client, order));
+  tagOrder(orderId);
   const log = req.log.child({ orderId });
 
   try {

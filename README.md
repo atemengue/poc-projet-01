@@ -166,6 +166,17 @@ La comparaison n'est valable que si seul le style de communication diffère. Un 
 
 Il compare les cinq `services/<nom>/domain.js` des deux projets (empreinte SHA-256, première ligne qui diffère) et leur configuration Compose (ressources, pool, latence simulée, `PREFETCH` = `OUTBOUND_CONNECTIONS`). Code de sortie : `0` parité respectée, `1` divergence (à corriger, ou à documenter dans l'ADR si elle est voulue), `2` contrôle impossible. Pas besoin que les piles tournent ; Docker doit être disponible.
 
+## Retrouver la trace d'une commande
+
+Chaque commande produit une trace qui traverse les services (requêtes SQL comprises). Pour la retrouver à partir de son `orderId` :
+
+- **Jaeger** (http://localhost:16686) : *Service* `order`, *Tags* `order.id=<orderId>`, **Find Traces** ;
+- **Grafana** → **Explore** → source **Jaeger** → *Search* : *Service* `order`, *Tags* `order.id=<orderId>` ;
+- ou par le `traceId` donné dans les logs d'Order (`order processed` en sync, `order received` en async) :
+  `docker compose -f <projet>/docker-compose.yml logs order | grep <orderId>`.
+
+Les opérations portent le nom de la route (`POST /orders`, `POST /payments`…) ; en async, chaque traitement d'événement apparaît comme `<service> process` avec l'attribut `event.type`. Jaeger garde les 5 000 dernières traces.
+
 ## Lancer une charge (k6) et mesurer les latences
 
 k6 tourne dans Docker sur `poc-net` (image figée). Chaque run a un identifiant (`RUN`) : il préfixe les `customerId` (pour retrouver les commandes en base) et étiquette les métriques k6 dans Prometheus (`testid`).

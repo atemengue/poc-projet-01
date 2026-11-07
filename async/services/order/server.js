@@ -3,6 +3,7 @@
 import { pool, withTransaction } from '../../lib/db.js';
 import { addEvent, publishEvents } from '../../lib/outbox.js';
 import { runService } from '../../lib/service.js';
+import { tagOrder } from '../../lib/server.js';
 import * as domain from './domain.js';
 import { handlers } from './handlers.js';
 
@@ -40,6 +41,9 @@ function routes(app, broker) {
       return { orderId: id, eventId: evt };
     });
 
+    tagOrder(orderId);
+    // Équivalent du log « order processed » de sync/ : orderId et traceId de la commande.
+    req.log.info({ orderId }, 'order received');
     reply.code(202).send({ orderId, status: 'RECEIVED' });
 
     // Publication après la réponse : la commande est déjà durable (outbox) ; un échec ici est

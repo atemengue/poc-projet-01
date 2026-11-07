@@ -17,6 +17,11 @@ if (process.env.OTEL_SDK_DISABLED !== 'true') {
         '@opentelemetry/instrumentation-fs': { enabled: false },
         '@opentelemetry/instrumentation-dns': { enabled: false },
         '@opentelemetry/instrumentation-net': { enabled: false },
+        // C-1 : ni les sondes de santé (toutes les 2 s) ni la collecte Prometheus (toutes les 5 s)
+        // ne créent de trace ; sinon elles noient celles des commandes et chargent Jaeger.
+        '@opentelemetry/instrumentation-http': {
+          ignoreIncomingRequestHook: (req) => req.url === '/health' || req.url === '/metrics',
+        },
         // traceId/spanId ajoutés à chaque log pino ; pas d'envoi des logs par OTLP.
         '@opentelemetry/instrumentation-pino': {
           disableLogSending: true,
