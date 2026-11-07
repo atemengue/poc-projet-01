@@ -82,7 +82,7 @@ C'est la croyance que la direction refuse d'adopter sans preuve (énoncé). Elle
 
 | # | Question | Valeur par défaut / état | Pourquoi ça compte |
 |---|---|---|---|
-| Q-01 | **Forme du pic** : montée progressive jusqu'à 500 cmd/s (S2) ou palier direct de 5 minutes (section Exigences) ? | D8 : montée 2 min puis palier 5 min | Change le profil de charge de S2 et la lecture de la dégradation. |
+| Q-01 | **Forme du pic** : montée progressive jusqu'à 500 cmd/s (S2) ou palier direct de 5 minutes (section Exigences) ? | **Tranchée (D8, 2026-11-07)** : préchauffage 1 min à 50 cmd/s, paliers de 1 min à 100, 200, 300, 400 cmd/s, puis palier de 5 min à 500 cmd/s (fenêtre du verdict) ; S1 : 3 min à 100 cmd/s | Change le profil de charge de S2 et la lecture de la dégradation. |
 | Q-02 | **Hybride** : frontière (paiement et stock dans le chemin critique, expédition et notification en asynchrone ?) et preuve (troisième variante `hybrid/` mesurée, ou déduction à partir de A et B, à étiqueter comme interprétation) ? | En attente (H6, brouillon) | Définit l'option hybride et la force de la preuve. À trancher avant les mesures. |
 | Q-03 | **Confirmation en B** : attend-elle l'expédition (`ShipmentRequested`) ou suit-elle directement la réservation du stock ? | D5 : dès `InventoryReserved`, à l'identique dans A et B | Détermine la latence de complétion ; change la lecture de H3a (voir §4). |
 | Q-04 | **Réponse initiale en B** : attend-elle le paiement ? | D4 : `202` sur « reçue », acceptation mesurée par horodatage | Change le sens de H2 et de H3. |
@@ -129,7 +129,7 @@ Point d'attention : en B, `accepted_at` n'est écrit qu'après le traitement du 
 | Mesure | Latence de complétion p95 de A et de B ; latence d'acceptation p95 de A |
 | Supportée | Écart ≥ 20 % en faveur de A, et A respecte le seuil de 1 s. |
 | Rejetée | Écart < 20 %, ou en faveur de B. |
-| Origine | Énoncé (« latence de complétion ») ; seuil de 20 % : proposition (marge contre le bruit de mesure), à valider. |
+| Origine | Énoncé (« latence de complétion ») ; seuil de 20 % et condition d'acceptation p95 < 1 s : **formulation validée telle quelle par le responsable du POC le 2026-11-07**. |
 
 Les latences d'acceptation et de complétion sont rapportées séparément : on ne compare jamais l'acceptation d'une variante à la complétion de l'autre.
 
@@ -147,7 +147,7 @@ L'énoncé parle d'un service **secondaire** indisponible, alors que S3 et S4 ci
 | Mesure | Part des commandes reçues pendant la panne qui sont terminées, et délai après le retour de Shipping |
 | Supportée | B ≥ 99 % en moins de 2 min. |
 | Rejetée | B < 99 %, ou plus de 2 min. |
-| Origine | Énoncé (H3) ; découpage, scénario S4b et seuils : proposition, à valider. |
+| Origine | Énoncé (H3) ; découpage, scénario S4b et seuils (30 s, ≥ 99 %, 2 min) : **validés par le responsable du POC le 2026-11-07**. Raison de la garder malgré un résultat attendu : c'est la seule hypothèse qui teste la H3 de l'énoncé (service secondaire), et une supposition n'est pas une preuve ; l'ADR dira que l'écart vient en partie du budget de nouvelles tentatives à 0 (en sync, il faudrait ajouter un mécanisme pour terminer ces commandes ; en async, la file le fait sans mécanisme ajouté). |
 
 Constat à porter dans l'ADR : avec D5, le synchrone confirme lui aussi pendant une panne de Shipping (la confirmation précède l'expédition). Le critère « accepter » de l'énoncé ne départage donc pas les variantes ici ; ce qui les distingue est la **complétion** (sans nouvelle tentative, A ne termine jamais ces commandes : violation de I11).
 
@@ -161,23 +161,24 @@ Constat à porter dans l'ADR : avec D5, le synchrone confirme lui aussi pendant 
 | Mesure | Commandes perdues (envoyées par k6 mais absentes de la base), part en état final et délai de récupération après le retour de Payment |
 | Supportée | 0 perdue et ≥ 99 % en état final en moins de 2 min. |
 | Rejetée | Au moins une commande perdue, ou < 99 %, ou plus de 2 min. |
-| Origine | Énoncé (S4) ; seuils : proposition, à valider. |
+| Origine | Énoncé (S4) ; seuils (30 s, 0 perdue, ≥ 99 % en état final en moins de 2 min) : **validés par le responsable du POC le 2026-11-07**, avec trois précisions : (1) trois états après drainage : **perdue** (envoyée par k6, absente de la base ; comptée en comparant les itérations k6 aux commandes du run), **bloquée** (présente, pas dans un état final), **terminée** (`CONFIRMED` ou `REJECTED`) ; en sync, les commandes de la panne sont attendues « bloquées », pas « perdues » ; (2) le critère p95 d'acceptation < 1 s ne s'applique pas aux commandes reçues pendant la panne (elles ne peuvent être acceptées qu'au retour de Payment, A-11) : leurs latences sont rapportées à part ; (3) seuils larges : ≈ 3 000 commandes en attente après 30 s, Payment en traite ≈ 1 280/s (64 en parallèle × 50 ms). |
 
 Une commande prise en compte pendant la panne ne peut être, au mieux, qu'« en attente » : jamais acceptée ni confirmée sans paiement autorisé.
 
-**H3c — Payment lent (S3)**
+**H3c — Payment lent (S3)** *(reformulée le 2026-11-07)*
 
-> Sous **100 cmd/s avec Payment à 2 s**, l'utilisation de l'**architecture événementielle** permettra de **répondre au client** avec une **latence de réponse HTTP p95 < 200 ms**, les commandes s'accumulant dans la file plutôt que dans les connexions ouvertes.
+> Pendant une **fenêtre de 60 s** où Payment répond en **2 s**, sous **100 cmd/s**, l'utilisation de l'**architecture événementielle** permettra de **répondre au client** avec une **latence de réponse HTTP p95 < 200 ms et 0 abandon côté client**, alors que l'architecture synchrone dépassera le délai client de 5 s (PC2) pour **plus de 50 %** des commandes reçues pendant la fenêtre.
 
 | Élément | Valeur |
 |---|---|
-| Attribut de qualité | Disponibilité (isolation des dépendances lentes) |
-| Mesure | Latence de réponse HTTP p95 (k6) ; diagnostic : profondeur de file (B), requêtes en vol et attente du pool sortant (A) |
-| Supportée | B < 200 ms. |
-| Rejetée | B ≥ 200 ms. |
-| Origine | Énoncé (S3) ; seuil : proposition, à valider. |
+| Attribut de qualité | Disponibilité (isolation d'une dépendance lente), expérience client |
+| Mesure | Latence de réponse HTTP p95 et abandons côté client (k6), sur les commandes envoyées pendant la fenêtre |
+| Supportée | B : p95 < 200 ms et 0 abandon ; A : abandons > 50 %. |
+| Rejetée | B dépasse 200 ms ou a des abandons, ou A a 50 % d'abandons ou moins. |
+| Rapporté, hors verdict (questions de S3 dans l'énoncé) | Débit accepté pendant la fenêtre (attendu ≈ 32 cmd/s dans les deux variantes : 64 traitements en parallèle / 2 s) ; profondeur de la file de Payment (B) et requêtes en vol (A) ; temps de reprise après la fenêtre ; sonde `GET /orders/:id` une fois par seconde (effet sur les autres requêtes) ; latence d'acceptation. |
+| Origine | Énoncé (S3) ; reformulation et seuils (fenêtre de 60 s, 200 ms, > 50 %) : **validés par le responsable du POC le 2026-11-07**. |
 
-La latence d'acceptation dépasse forcément 2 s dans les deux variantes ; ce qui se compare est l'effet sur les clients et sur les autres commandes.
+Pourquoi cette reformulation : la version précédente (B répond en moins de 200 ms) était acquise d'avance, puisque B répond `202` sans attendre Payment. Le vrai effet de S3 est que **les deux variantes sont plafonnées au même débit** (≈ 32 cmd/s) : ce qui diffère est **qui subit l'attente**, le client en synchrone (requêtes qui dépassent 5 s), la file en événementiel (le client a sa réponse, l'acceptation est retardée). Le seuil de 50 % vient du calcul : seules ≈ 32 commandes sur 100 peuvent passer chaque seconde, soit ≈ 68 % d'abandons attendus en A. La latence d'acceptation dépasse forcément 2 s dans les deux variantes.
 
 ### H4 — Cohérence (coût de l'idempotence)
 
@@ -186,25 +187,30 @@ La latence d'acceptation dépasse forcément 2 s dans les deux variantes ; ce qu
 | Élément | Valeur |
 |---|---|
 | Attribut de qualité | Cohérence, complexité de coordination |
-| Mesure | Violations de I7 et I1 ; latence de complétion p95 avec et sans doublons |
-| Supportée | I7 = 0, I1 = 0, surcoût < 10 %. |
+| Mesure | Violations de I7 et I1 ; latence de complétion p95 avec et sans doublons (idempotence active dans les deux cas) |
+| Supportée | I7 = 0, I1 = 0, surcoût < 10 %, dans chacune des trois répétitions. |
 | Rejetée | I7 > 0 ou I1 > 0 avec idempotence, ou surcoût ≥ 10 %. |
-| Validité | Le témoin sans idempotence doit montrer I7 > 0 ; sinon, le test ne prouve rien. |
-| Origine | Proposition (reformulée le 2026-11-07 : l'ancienne version, « l'événementiel exige de l'idempotence », était vraie par construction). Seuil de 10 % à valider. |
+| Validité | Le témoin sans idempotence doit montrer des effets en double ; sinon, le test ne prouve rien. |
+| Rapporté, hors verdict | (1) Coût du **mécanisme lui-même**, même sans doublon : latence de complétion p95 idempotence active contre désactivée, sans doublons ; (2) **inventaire de la complexité ajoutée** pour tenir l'invariant : composants et mécanismes (outbox, `processed_events`, DLQ, balayage de secours, `Idempotency-Key` côté sync), lignes de code concernées dans chaque variante. Répond à la question de S5 : « quelle complexité supplémentaire l'asynchronisme introduit-il pour conserver les invariants ? ». |
+| Origine | Proposition (reformulée le 2026-11-02 : l'ancienne version, « l'événementiel exige de l'idempotence », était vraie par construction). **Validée par le responsable du POC le 2026-11-07** : verdict sur le coût des doublons, seuil de 10 %, coût du mécanisme et inventaire de complexité rapportés à part, **S5 symétrique**. |
 
-S5 symétrique (proposition) : un retry client après un timeout peut aussi dupliquer un paiement en synchrone. L'énoncé ne demande S5 que pour l'asynchrone ; tester aussi A (avec `Idempotency-Key`) rendrait la comparaison du coût équitable.
+**S5 symétrique (validé le 2026-11-07)** : l'énoncé ne demande S5 que pour l'asynchrone, mais un client qui renvoie sa requête (délai dépassé, réseau) duplique aussi en synchrone. Le même scénario est donc joué sur A : à 10 cmd/s, k6 envoie **chaque requête deux fois avec le même en-tête `Idempotency-Key`** ; avec la protection active, Order renvoie la réponse mémorisée (`idempotency_keys`) sans refaire le traitement ; le témoin sans protection crée deux commandes. Mesure spécifique à A : **commandes en double par requête client** (deux commandes pour un même `Idempotency-Key`), qui n'apparaissent pas dans I7 (ce sont deux commandes distinctes). H4 compare ainsi le coût de la protection contre les doublons **dans les deux styles**, pour la matrice de décision.
 
 ### H5 — Observabilité
 
-> Sous **100 cmd/s** (S1), dans l'**architecture événementielle**, la **reconstruction du traitement d'une commande** sera plus difficile : **moins de 99 % des commandes** auront une trace complète, alors que le synchrone en aura au moins 99 %. Une trace est complète si les étapes de la commande partagent le même `traceId`.
+> Sous **100 cmd/s** (S1), dans l'**architecture événementielle**, la **reconstruction du traitement d'une commande** sera plus difficile : **moins de 99 % des commandes** auront une trace complète, alors que le synchrone en aura au moins 99 %.
 
 | Élément | Valeur |
 |---|---|
 | Attribut de qualité | Observabilité, facilité de débogage |
-| Mesure | Part des commandes dont la trace Jaeger est complète, sur un échantillon (script à écrire) |
+| Mesure | Part des commandes **échantillonnées** (10 % pendant S1, PC3) dont la trace Jaeger est complète. Script qui interroge Jaeger par `order.id` **juste après le run** (Jaeger garde 5 000 traces, assez pour ≈ 1 800 commandes tracées en S1). |
+| Trace complète | Toutes les étapes attendues dans la **même** trace, selon l'état final : `CONFIRMED` : Order, Payment, Inventory, Shipping, Notification et la fin chez Order (`completed`) ; `REJECTED` pour paiement refusé : Order, Payment, Notification ; `REJECTED` pour stock insuffisant : Order, Payment, Inventory, annulation chez Payment, Notification. |
 | Supportée | B < 99 % et A ≥ 99 %. |
 | Rejetée | B ≥ 99 %. |
-| Origine | Proposition ; seuil à valider. |
+| Rapporté, hors verdict | **Effort d'instrumentation** de chaque variante : propagation du contexte (automatique en A ; code manuel en B pour restaurer le contexte depuis l'outbox, AS9), bruit à supprimer (balayage de secours, M3), défauts trouvés en lisant les traces (Nagle, C6), lignes de code concernées. |
+| Origine | Proposition ; **validée par le responsable du POC le 2026-11-07** (seuil 99 %, définition d'une trace complète par état final, mesure sur l'échantillon, effort rapporté à part). |
+
+Attendu au vu de la conception : avec le `traceparent` gardé dans l'outbox, la trace async est déjà complète (99 spans à travers les cinq services, V13) ; H5 risque d'être **rejetée**. Ce serait un résultat : la difficulté supposée est surmontable, et son coût se lit dans l'effort d'instrumentation, pas dans le pourcentage.
 
 ### H6 — Architecture hybride *(brouillon, en attente de Q-02)*
 

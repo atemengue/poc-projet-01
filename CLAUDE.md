@@ -132,6 +132,7 @@ Scénarios (durées et formes à confirmer, voir D8) :
 | S2 | montée progressive jusqu'à 500 cmd/s, puis 5 min à 500 | aucune |
 | S3 | 100 cmd/s | Payment à 2 s pendant une fenêtre, avec sonde `GET /orders/:id` |
 | S4 | 100 cmd/s | `docker compose stop payment` pendant 30 s puis redémarrage |
+| S4b | 100 cmd/s | `docker compose stop shipping` pendant 30 s puis redémarrage (ajouté le 2026-11-07 pour H3a : service secondaire) |
 | S5 | faible débit | événement dupliqué ×2, idempotence activée puis désactivée (témoin) |
 
 Protocole de run : un seul projet actif → reset + seed → préchauffage non compté → scénario → **attendre le drainage** → `verify-invariants.js` → extraction des latences SQL → métriques Prometheus → trois répétitions en alternant l'ordre des projets. Sorties dans `results/<projet>/<scénario>/rep-<n>/`.
@@ -174,10 +175,10 @@ k6 n'est pas installé sur la machine de développement : l'exécuter via Docker
 |---|---|---|
 | D4 | Réponse initiale en B | `202` sur « reçue », « acceptée » mesurée par horodatage |
 | D5 | Où se place la confirmation | Dès `InventoryReserved`. **Conservée sur `main`** (2026-11-07, responsable du POC). Le workflow de l'énoncé (confirmation après `ShipmentRequested`) sera testé plus tard sur la branche `experiment/workflow-enonce` : colonne `orders.shipping_status`, condition `shipping_status='REQUESTED'` ajoutée à la requête de confirmation, panne de Shipping qui laisse la commande `ACCEPTED`, I8 et I11 reformulés, même changement dans `sync/` et `async/`. |
-| D8 | Durée de S1, forme du pic de S2 | S1 : 3 min ; S2 : montée 2 min puis palier 5 min |
+| D8 | Durée de S1, forme du pic de S2 | **Tranchée le 2026-11-07** (responsable du POC). Préchauffage non compté de 1 min à 50 cmd/s dans les deux. **S1** : 3 min à 100 cmd/s. **S2** : paliers de 1 min à 100, 200, 300, 400 cmd/s (lecture de la dégradation, hors verdict), puis **palier de 5 min à 500 cmd/s** (fenêtre du verdict de H1). Drainage jusqu'à ce que toutes les commandes soient terminées, plafonné à 10 min. Seules les commandes reçues (`received_at`) pendant la fenêtre de mesure sont comptées. |
 | D12 | Mélange de charge | 3 % de paiements refusés, 2 % sur `SKU-LOW` |
-| D13 | Plafond de VUs k6 au-delà de la saturation (S2) | À trancher avant S2. Constat (C5) : `sync/` sature vers 250–300 cmd/s, k6 atteint son plafond de VUs et perd des itérations, ce qui rendrait le run invalide par la règle des 1 % à cause du banc d'essai. Pistes : délai maximal côté k6 (ex. 10 s, la requête compte comme échec) ou plus de VUs (~10 000, mémoire de k6). |
-| D15 | Échantillonnage des traces pendant les runs de charge | À trancher avant S1/S2 (même taux pour A et B, ex. 10 %). Tracer 100 % coûte du CPU aux services (C5) et a fait tomber Jaeger (M4, M9). Corrections C-1 à C-4 notées dans `docs/async-mise-en-place.md` §8. |
+| D13 | Plafond de VUs k6 au-delà de la saturation (S2) | **Tranchée le 2026-11-07** (responsable du POC) : **délai maximal côté client de 5 s** (k6 abandonne la requête et la compte en échec), identique pour sync/ et async/, plafond de 3 000 VUs (500 cmd/s × 5 s = 2 500 requêtes en vol au plus). La règle « ≥ 1 % d'itérations perdues = run invalide » est conservée : elle signale désormais une limite de k6, pas du système. Les abandons côté client sont rapportés en plus ; le verdict reste lu en base. Détail : `docs/decisions-conception.md`, PC2. |
+| D15 | Échantillonnage des traces pendant les runs de charge | **Tranchée le 2026-11-07** (responsable du POC, option B) : 100 % par défaut (vérifications, cas de compréhension, S5) ; **10 % pendant S1 à S4**, identique pour sync/ et async/ (`OTEL_TRACES_SAMPLER=parentbased_traceidratio`, `OTEL_TRACES_SAMPLER_ARG=0.1`), ajouté au contrôle de parité. H5 se mesure sur les commandes échantillonnées. Essai de calibrage prévu pour mesurer le coût de l'instrumentation. Détail : `docs/decisions-conception.md`, PC3. |
 | D14 | Ordre d'arrivée des événements chez Order (`async/`) | « Noter le fait, puis décider » (validé le 2026-11-07) : chaque événement enregistre son fait, puis Order tente la décision (confirmer ou rejeter pour stock insuffisant) ; le second arrivé décide. Demande `markStockInsufficient` et la condition `stock_status='INSUFFICIENT'` dans le rejet, dans les deux `domain.js`. |
 
 Si une de ces décisions a été tranchée depuis, mets ce tableau à jour plutôt que de t'y fier.
@@ -188,7 +189,13 @@ Si une de ces décisions a été tranchée depuis, mets ce tableau à jour plut�
 
 Repères (restructuration du 2026-11-07) :
 - **Assumption centrale** : l'événementiel est plus scalable que le synchrone. Elle est mise à l'épreuve par **H1** (S2, 500 cmd/s : débit accepté ≥ 95 % du débit offert, p95 d'acceptation < 1 s, 0 violation de I1), seuils validés par le responsable du POC.
-- Autres hypothèses, seuils encore **à valider** : H2 (latence de complétion, S1), H3a (panne de Shipping, scénario **S4b à ajouter**), H3b (Payment indisponible, S4), H3c (Payment lent, S3), H4 (coût de l'idempotence, S5), H5 (part de traces complètes), H6 (hybride, brouillon en attente de Q-02 : troisième variante mesurée ou déduction).
+- **H2** (latence de complétion, S1) : formulation et seuils validés le 2026-11-07 (écart ≥ 20 %, acceptation p95 < 1 s).
+- **H3a** (panne de Shipping, scénario **S4b**) : gardée, seuils validés le 2026-11-07 (30 s, ≥ 99 % terminées en moins de 2 min).
+- **H3b** (Payment indisponible, S4) : gardée, seuils validés le 2026-11-07 (0 perdue, ≥ 99 % en état final en moins de 2 min ; états perdue / bloquée / terminée).
+- **H3c** (Payment lent, S3) : reformulée et validée le 2026-11-07 (fenêtre de 60 s à 2 s ; B : réponse HTTP p95 < 200 ms et 0 abandon ; A : > 50 % d'abandons au délai client de 5 s).
+- **H4** (coût de l'idempotence, S5) : validée le 2026-11-07 (I7 = 0, I1 = 0, surcoût des doublons < 10 % ; coût du mécanisme et inventaire de complexité rapportés à part ; **S5 symétrique** : `Idempotency-Key` et requête envoyée deux fois côté sync, mesure « commandes en double par requête client »).
+- **H5** (part de traces complètes) : validée le 2026-11-07 (seuil 99 %, trace complète définie par état final, mesure sur les commandes échantillonnées juste après le run, effort d'instrumentation rapporté à part).
+- Autres hypothèses, seuils encore **à valider** : H6 (hybride, brouillon en attente de Q-02 : troisième variante mesurée ou déduction).
 - Les hypothèses, seuils et critères de verdict se fixent **avant** toute mesure ; un seuil ne se modifie pas après avoir vu les résultats.
 
 Chaque métrique doit répondre à : **quelle hypothèse permet-elle d'évaluer ?** Une métrique de diagnostic explique un verdict, elle ne décide rien.
