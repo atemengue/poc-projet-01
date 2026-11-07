@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node --test",
     "reset": "node scripts/reset.js",
-    "verify": "node scripts/verify-invariants.js"
+    "verify": "node scripts/verify-invariants.js",
+    "latency": "node scripts/latency.js"
   },
   "keywords": [],
   "author": "",

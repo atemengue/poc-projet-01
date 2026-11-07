@@ -135,6 +135,33 @@ Remettre la base dans son état de départ (vide les commandes, remet le stock),
 
 Tests du vérificateur (une violation injectée par règle, sans modifier la base) : `(cd common && npm test)`.
 
+## Lancer une charge (k6) et mesurer les latences
+
+k6 tourne dans Docker sur `poc-net` (image figée). Chaque run a un identifiant (`RUN`) : il préfixe les `customerId` (pour retrouver les commandes en base) et étiquette les métriques k6 dans Prometheus (`testid`).
+
+```bash
+K6=grafana/k6:2.3.0@sha256:2dd4756ec6e14e62778916e1eb850108e4b499304c02df56760fa0bdb0fba0b8
+RUN=dry-sync-01
+OUT=results/dry-run/sync/$RUN && mkdir -p $OUT
+
+(cd common && npm run reset)
+
+docker run --rm --network poc-net \
+  -v "$PWD/common/benchmarks:/scripts:ro" -v "$PWD/results:/results" \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write \
+  -e K6_PROMETHEUS_RW_TREND_STATS='p(50),p(95),p(99),avg,max' \
+  $K6 run -o experimental-prometheus-rw --tag testid=$RUN \
+  -e RUN_ID=$RUN -e RATE=100 -e DURATION=1m \
+  --summary-export=/results/dry-run/sync/$RUN/k6-summary.json /scripts/place-order.js
+
+(cd common && npm run verify -- --out ../$OUT/invariants.json)
+node common/scripts/latency.js --run $RUN --out $OUT/latency.json
+```
+
+- Pendant le run : Grafana → dossier **POC** → tableau **POC — Run k6 et services** (choisir le run dans la liste `Run`). Il montre la charge vue par k6 (débit, itérations perdues, statuts HTTP, latence de réponse, VUs) et ce qu'encaissent les services (CPU, boucle d'événements, mémoire).
+- `latency.js` donne les statuts, le débit et les latences d'acceptation, de confirmation et de complétion (p50/p95/p99), calculés depuis la base. Ce sont elles qui comptent pour les verdicts ; la latence HTTP de k6 sert de contrôle.
+- Un essai à blanc (`results/dry-run/`) sert à calibrer le banc d'essai ; il n'est jamais cité comme résultat.
+
 ## Vérifier que tout fonctionne
 
 **Grafana** : dans *Connections → Data sources*, ouvrir `Prometheus` puis `Jaeger` et cliquer sur **Test** : un message vert doit apparaître.
