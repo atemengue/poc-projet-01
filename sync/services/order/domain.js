@@ -132,12 +132,25 @@ export async function confirmOrder(db, orderId) {
   return rowCount === 1;
 }
 
-/** Stock insuffisant après paiement autorisé : ACCEPTED → REJECTED. Le void du paiement suit. */
+/** Stock insuffisant (copie locale), noté avant la décision de rejet (D14). */
+export async function markStockInsufficient(db, orderId) {
+  const { rowCount } = await db.query(
+    `UPDATE orders SET stock_status = 'INSUFFICIENT' WHERE id = $1 AND stock_status = 'PENDING'`,
+    [orderId],
+  );
+  return rowCount === 1;
+}
+
+/**
+ * Stock insuffisant après paiement autorisé : ACCEPTED → REJECTED. Le void du paiement suit.
+ * Ne rejette que si les deux faits sont notés (paiement autorisé ET stock insuffisant), quel que
+ * soit l'ordre dans lequel ils sont arrivés (D14 : « noter le fait, puis décider »).
+ */
 export async function rejectForInsufficientStock(db, orderId) {
   const { rowCount } = await db.query(
-    `UPDATE orders SET status = 'REJECTED', stock_status = 'INSUFFICIENT',
-            rejection_reason = 'INSUFFICIENT_STOCK', rejected_at = now()
-      WHERE id = $1 AND status = 'ACCEPTED'`,
+    `UPDATE orders SET status = 'REJECTED', rejection_reason = 'INSUFFICIENT_STOCK', rejected_at = now()
+      WHERE id = $1 AND status = 'ACCEPTED'
+        AND payment_status = 'AUTHORIZED' AND stock_status = 'INSUFFICIENT'`,
     [orderId],
   );
   return rowCount === 1;

@@ -1,0 +1,30 @@
+# Projet B : workflow orienté événements (chorégraphie via RabbitMQ).
+# Un seul projet actif à la fois (mêmes ports que poc-sync).
+name: poc-async
+
+include:
+  - ../common/db/postgres.compose.yml
+
+services:
+  # Broker (AS8). 2 CPU / 1 Go comme PostgreSQL : composant propre au style, compté dans les
+  # ressources de async/. Topologie, utilisateur et plugins déclarés par fichiers.
+  rabbitmq:
+    image: rabbitmq:4.3.6-management@sha256:54cb013d76cd1fd6c0a0708f34062ad61c452bb6f016b434c6c33f1a765d2b58
+    hostname: rabbitmq
+    cpus: 2
+    mem_limit: 1g
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/20-poc.conf:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # interface d'administration (poc / poc)
+    networks: [poc-net]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  # Les 5 services sont ajoutés au temps 2 de l'étape 4 (docs/async-mise-en-place.md).

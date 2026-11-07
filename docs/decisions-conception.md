@@ -48,3 +48,7 @@ Chaque décision indique sa source : **Énoncé**, **Responsable** (décidé par
 | VI5 | Test du vérificateur : une violation injectée par règle, plus deux témoins cohérents, chacun dans une transaction annulée (`ROLLBACK`) : le test tourne sur la base du POC sans la modifier ni dépendre de son contenu. | Proposition (validée le 2026-11-03) |
 | VI6 | I7 compte toute ligne de paiement en double, quel que soit son statut (et non seulement les paiements autorisés) : deux lignes signifient deux appels au prestataire. | Proposition |
 | VI7 | `reset.js` refuse de vider une base qui ne s'appelle pas `poc` ou `poc_*`. | Proposition |
+
+## Variante asynchrone (étape 4, 2026-11-07)
+
+Décisions AS1 à AS11 (broker, chaîne d'événements, compensation, ordre d'arrivée, budget de nouvelles tentatives, `prefetch`, relais de l'outbox, RabbitMQ, propagation de trace, réponse HTTP, enveloppe) : voir `docs/async-mise-en-place.md`, §2.

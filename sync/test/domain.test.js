@@ -91,3 +91,24 @@ test('createOrder refuse une commande sans instant d\'arrivée valide', async ()
     assert.equal(client.calls.length, 0, 'aucun INSERT ne doit partir');
   }
 });
+
+// --- D14 : le rejet pour stock insuffisant exige les deux faits notés
+
+import { markStockInsufficient, rejectForInsufficientStock } from '../services/order/domain.js';
+
+test('markStockInsufficient ne touche que stock_status, depuis PENDING', async () => {
+  const client = fakeClient();
+  await markStockInsufficient(client, 'o-1');
+  assert.match(client.calls[0].sql, /SET stock_status = 'INSUFFICIENT'/);
+  assert.match(client.calls[0].sql, /stock_status = 'PENDING'/);
+  assert.doesNotMatch(client.calls[0].sql, /status = 'REJECTED'/);
+});
+
+test('rejectForInsufficientStock exige ACCEPTED, paiement AUTHORIZED et stock INSUFFICIENT', async () => {
+  const client = fakeClient();
+  await rejectForInsufficientStock(client, 'o-1');
+  const { sql } = client.calls[0];
+  assert.match(sql, /status = 'ACCEPTED'/);
+  assert.match(sql, /payment_status = 'AUTHORIZED'/);
+  assert.match(sql, /stock_status = 'INSUFFICIENT'/);
+});

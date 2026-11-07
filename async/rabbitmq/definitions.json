@@ -1,0 +1,286 @@
+{
+  "users": [
+    {
+      "name": "poc",
+      "password_hash": "lTRgjOSQaBU8ZlubiV+gTK1/Tdq0WoFXma7l+tNWn6p5rHQf",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": [
+        "administrator"
+      ]
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "poc",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "orders",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "orders.dlx",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "order",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "orders.dlx",
+        "x-dead-letter-routing-key": "order"
+      }
+    },
+    {
+      "name": "order.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "payment",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "orders.dlx",
+        "x-dead-letter-routing-key": "payment"
+      }
+    },
+    {
+      "name": "payment.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "inventory",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "orders.dlx",
+        "x-dead-letter-routing-key": "inventory"
+      }
+    },
+    {
+      "name": "inventory.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "shipping",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "orders.dlx",
+        "x-dead-letter-routing-key": "shipping"
+      }
+    },
+    {
+      "name": "shipping.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "notification",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic",
+        "x-dead-letter-exchange": "orders.dlx",
+        "x-dead-letter-routing-key": "notification"
+      }
+    },
+    {
+      "name": "notification.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "order",
+      "destination_type": "queue",
+      "routing_key": "PaymentAuthorized",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "order",
+      "destination_type": "queue",
+      "routing_key": "PaymentDeclined",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "order",
+      "destination_type": "queue",
+      "routing_key": "InventoryReserved",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "order",
+      "destination_type": "queue",
+      "routing_key": "InventoryInsufficient",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "order",
+      "destination_type": "queue",
+      "routing_key": "PaymentVoided",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "order",
+      "destination_type": "queue",
+      "routing_key": "NotificationSent",
+      "arguments": {}
+    },
+    {
+      "source": "orders.dlx",
+      "vhost": "/",
+      "destination": "order.dlq",
+      "destination_type": "queue",
+      "routing_key": "order",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "payment",
+      "destination_type": "queue",
+      "routing_key": "OrderCreated",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "payment",
+      "destination_type": "queue",
+      "routing_key": "OrderRejected",
+      "arguments": {}
+    },
+    {
+      "source": "orders.dlx",
+      "vhost": "/",
+      "destination": "payment.dlq",
+      "destination_type": "queue",
+      "routing_key": "payment",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "inventory",
+      "destination_type": "queue",
+      "routing_key": "PaymentAuthorized",
+      "arguments": {}
+    },
+    {
+      "source": "orders.dlx",
+      "vhost": "/",
+      "destination": "inventory.dlq",
+      "destination_type": "queue",
+      "routing_key": "inventory",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "shipping",
+      "destination_type": "queue",
+      "routing_key": "OrderConfirmed",
+      "arguments": {}
+    },
+    {
+      "source": "orders.dlx",
+      "vhost": "/",
+      "destination": "shipping.dlq",
+      "destination_type": "queue",
+      "routing_key": "shipping",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "notification",
+      "destination_type": "queue",
+      "routing_key": "ShipmentRequested",
+      "arguments": {}
+    },
+    {
+      "source": "orders",
+      "vhost": "/",
+      "destination": "notification",
+      "destination_type": "queue",
+      "routing_key": "OrderRejected",
+      "arguments": {}
+    },
+    {
+      "source": "orders.dlx",
+      "vhost": "/",
+      "destination": "notification.dlq",
+      "destination_type": "queue",
+      "routing_key": "notification",
+      "arguments": {}
+    }
+  ]
+}

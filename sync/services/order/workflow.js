@@ -36,6 +36,7 @@ export async function processOrder(order, log) {
   if (reservation.status === 'INSUFFICIENT') {
     // Compensation : la commande est rejetée, puis le paiement autorisé est annulé.
     // Si l'annulation échoue, UpstreamError remonte et I4 le signalera.
+    await domain.markStockInsufficient(pool, orderId);
     await domain.rejectForInsufficientStock(pool, orderId);
     await postJson(`${PAYMENT_URL}/payments/void`, { orderId });
     await domain.markPaymentVoided(pool, orderId);

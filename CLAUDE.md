@@ -169,9 +169,11 @@ k6 n'est pas installé sur la machine de développement : l'exécuter via Docker
 | # | Question | Valeur par défaut |
 |---|---|---|
 | D4 | Réponse initiale en B | `202` sur « reçue », « acceptée » mesurée par horodatage |
-| D5 | Où se place la confirmation | Dès `InventoryReserved` |
+| D5 | Où se place la confirmation | Dès `InventoryReserved`. **Conservée sur `main`** (2026-11-07, responsable du POC). Le workflow de l'énoncé (confirmation après `ShipmentRequested`) sera testé plus tard sur la branche `experiment/workflow-enonce` : colonne `orders.shipping_status`, condition `shipping_status='REQUESTED'` ajoutée à la requête de confirmation, panne de Shipping qui laisse la commande `ACCEPTED`, I8 et I11 reformulés, même changement dans `sync/` et `async/`. |
 | D8 | Durée de S1, forme du pic de S2 | S1 : 3 min ; S2 : montée 2 min puis palier 5 min |
 | D12 | Mélange de charge | 3 % de paiements refusés, 2 % sur `SKU-LOW` |
+| D13 | Plafond de VUs k6 au-delà de la saturation (S2) | À trancher avant S2. Constat (C5) : `sync/` sature vers 250–300 cmd/s, k6 atteint son plafond de VUs et perd des itérations, ce qui rendrait le run invalide par la règle des 1 % à cause du banc d'essai. Pistes : délai maximal côté k6 (ex. 10 s, la requête compte comme échec) ou plus de VUs (~10 000, mémoire de k6). |
+| D14 | Ordre d'arrivée des événements chez Order (`async/`) | « Noter le fait, puis décider » (validé le 2026-11-07) : chaque événement enregistre son fait, puis Order tente la décision (confirmer ou rejeter pour stock insuffisant) ; le second arrivé décide. Demande `markStockInsufficient` et la condition `stock_status='INSUFFICIENT'` dans le rejet, dans les deux `domain.js`. |
 
 Si une de ces décisions a été tranchée depuis, mets ce tableau à jour plutôt que de t'y fier.
 
