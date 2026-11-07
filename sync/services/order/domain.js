@@ -13,22 +13,22 @@ export function validateOrderRequest(body) {
   const errors = [];
   if (!isObject(body)) return { errors: ['body must be an object'] };
 
-  const { customerId, items, paymentInformation, shippingAddress } = body;
+  // Forme de l'énoncé : items[] = liste de SKU, quantity = une quantité appliquée à chaque
+  // article (décision SV5). Traduite ensuite en lignes { sku, quantity } pour le reste du domaine.
+  const { customerId, items, quantity, paymentInformation, shippingAddress } = body;
   if (!isNonEmptyString(customerId)) errors.push('customerId is required');
+  if (!Number.isInteger(quantity) || quantity <= 0) errors.push('quantity must be a positive integer');
   if (!isObject(paymentInformation)) errors.push('paymentInformation must be an object');
   if (!isObject(shippingAddress)) errors.push('shippingAddress must be an object');
 
   if (!Array.isArray(items) || items.length === 0) {
-    errors.push('items must be a non-empty array');
+    errors.push('items must be a non-empty array of SKUs');
   } else {
     const seen = new Set();
-    items.forEach((item, i) => {
-      if (!isObject(item) || !isNonEmptyString(item.sku)) errors.push(`items[${i}].sku is required`);
-      else if (seen.has(item.sku)) errors.push(`items[${i}].sku is duplicated`);
-      else seen.add(item.sku);
-      if (!Number.isInteger(item?.quantity) || item.quantity <= 0) {
-        errors.push(`items[${i}].quantity must be a positive integer`);
-      }
+    items.forEach((sku, i) => {
+      if (!isNonEmptyString(sku)) errors.push(`items[${i}] must be a SKU (non-empty string)`);
+      else if (seen.has(sku)) errors.push(`items[${i}] is duplicated`);
+      else seen.add(sku);
     });
   }
 
@@ -36,7 +36,7 @@ export function validateOrderRequest(body) {
   return {
     value: {
       customerId,
-      items: items.map(({ sku, quantity }) => ({ sku, quantity })),
+      items: items.map((sku) => ({ sku, quantity })),
       paymentInformation,
       shippingAddress,
     },

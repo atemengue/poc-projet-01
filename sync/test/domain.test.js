@@ -5,41 +5,51 @@ import { decide, DECLINED_CARD_TOKEN } from '../services/payment/domain.js';
 
 const valid = () => ({
   customerId: 'c-1',
-  items: [{ sku: 'SKU-001', quantity: 2 }],
+  items: ['SKU-001', 'SKU-003'],
+  quantity: 2,
   paymentInformation: { cardToken: 'tok_ok' },
   shippingAddress: { line1: '1 rue X', city: 'Montréal' },
 });
 
-test('une requête complète est acceptée', () => {
+test('une requête complète est acceptée et la quantité appliquée à chaque article', () => {
   const { value, errors } = validateOrderRequest(valid());
   assert.equal(errors, undefined);
-  assert.deepEqual(value.items, [{ sku: 'SKU-001', quantity: 2 }]);
+  assert.deepEqual(value.items, [{ sku: 'SKU-001', quantity: 2 }, { sku: 'SKU-003', quantity: 2 }]);
 });
 
 test('les champs manquants sont tous signalés', () => {
   const { errors } = validateOrderRequest({});
-  assert.equal(errors.length, 4);
+  assert.equal(errors.length, 5);
 });
 
 test('un corps non objet est refusé', () => {
   for (const body of [null, 'x', [], 42]) assert.ok(validateOrderRequest(body).errors);
 });
 
-test('quantité nulle, négative ou décimale refusée', () => {
-  for (const quantity of [0, -1, 1.5, '2']) {
-    const body = { ...valid(), items: [{ sku: 'SKU-001', quantity }] };
+test('quantité absente, nulle, négative, décimale ou texte refusée', () => {
+  for (const quantity of [undefined, 0, -1, 1.5, '2']) {
+    const body = { ...valid(), quantity };
     assert.ok(validateOrderRequest(body).errors, `quantity=${quantity}`);
   }
 });
 
+test('items doit être une liste non vide de SKU', () => {
+  for (const items of [[], 'SKU-001', [''], [42], [{ sku: 'SKU-001', quantity: 1 }]]) {
+    const body = { ...valid(), items };
+    assert.ok(validateOrderRequest(body).errors, `items=${JSON.stringify(items)}`);
+  }
+});
+
 test('un SKU en double est refusé', () => {
-  const body = { ...valid(), items: [{ sku: 'A', quantity: 1 }, { sku: 'A', quantity: 2 }] };
+  const body = { ...valid(), items: ['A', 'A'] };
   assert.match(validateOrderRequest(body).errors[0], /duplicated/);
 });
 
-test('les champs inconnus des articles sont ignorés', () => {
-  const body = { ...valid(), items: [{ sku: 'SKU-001', quantity: 1, price: 0 }] };
-  assert.deepEqual(validateOrderRequest(body).value.items, [{ sku: 'SKU-001', quantity: 1 }]);
+test('les champs inconnus sont ignorés', () => {
+  const body = { ...valid(), items: ['SKU-001'], price: 0 };
+  const { value } = validateOrderRequest(body);
+  assert.deepEqual(Object.keys(value).sort(), ['customerId', 'items', 'paymentInformation', 'shippingAddress']);
+  assert.deepEqual(value.items, [{ sku: 'SKU-001', quantity: 2 }]);
 });
 
 test('le paiement est refusé uniquement avec le jeton de refus', () => {

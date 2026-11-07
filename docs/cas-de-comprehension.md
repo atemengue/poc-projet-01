@@ -14,10 +14,10 @@ Toutes les commandes se lancent depuis la racine du dépôt.
 docker compose -f common/infra/docker-compose.yml up -d
 docker compose -f sync/docker-compose.yml up -d --wait
 
-# fonction d'envoi : order <client> <articles> <jeton de carte>
+# fonction d'envoi : order <client> <SKU> <quantité> <jeton de carte>
 order() { curl -s -w '  [HTTP %{http_code}, %{time_total}s]\n' -X POST localhost:3000/orders \
-  -H 'content-type: application/json' -d "{\"customerId\":\"$1\",\"items\":$2,
-  \"paymentInformation\":{\"cardToken\":\"$3\"},\"shippingAddress\":{\"city\":\"Montreal\"}}"; }
+  -H 'content-type: application/json' -d "{\"customerId\":\"$1\",\"items\":[\"$2\"],\"quantity\":$3,
+  \"paymentInformation\":{\"cardToken\":\"$4\"},\"shippingAddress\":{\"city\":\"Montreal\"}}"; }
 ```
 
 Dans un second terminal, suivre les logs (chaque ligne `order processed` donne `orderId` et `traceId`) :
@@ -51,16 +51,16 @@ FROM orders o WHERE o.customer_id LIKE 'cas-%' ORDER BY o.received_at;"
 **Rejouer** :
 
 ```bash
-order cas1-a '[{"sku":"SKU-001","quantity":2}]' tok_ok         # parcours normal
-order cas1-b '[{"sku":"SKU-002","quantity":1}]' tok_declined   # paiement refusé
-order cas1-c '[{"sku":"SKU-LOW","quantity":51}]' tok_ok        # stock insuffisant
+order cas1-a SKU-001 2 tok_ok         # parcours normal
+order cas1-b SKU-002 1 tok_declined   # paiement refusé
+order cas1-c SKU-LOW 51 tok_ok        # stock insuffisant
 
 docker compose -f sync/docker-compose.yml stop shipping
-order cas1-d '[{"sku":"SKU-003","quantity":1}]' tok_ok         # panne de Shipping
+order cas1-d SKU-003 1 tok_ok         # panne de Shipping
 docker compose -f sync/docker-compose.yml start shipping
 
 docker compose -f sync/docker-compose.yml stop payment
-order cas1-e '[{"sku":"SKU-003","quantity":1}]' tok_ok         # panne de Payment
+order cas1-e SKU-003 1 tok_ok         # panne de Payment
 docker compose -f sync/docker-compose.yml start payment
 ```
 
@@ -100,8 +100,8 @@ La commande est identique ; seul l'état des connexions change.
 
 ```bash
 # attendre au moins 15 s sans rien envoyer, puis :
-order cas2-froid '[{"sku":"SKU-001","quantity":1}]' tok_ok
-for i in 1 2 3; do order cas2-chaud '[{"sku":"SKU-001","quantity":1}]' tok_ok; done
+order cas2-froid SKU-001 1 tok_ok
+for i in 1 2 3; do order cas2-chaud SKU-001 1 tok_ok; done
 ```
 
 **Observer** :
@@ -184,7 +184,7 @@ La dégradation serait sous-estimée, et pas forcément de la même façon dans 
 
 ```bash
 # attendre au moins 15 s sans rien envoyer (commande froide, voir C2), puis :
-order cas3-froid '[{"sku":"SKU-001","quantity":1}]' tok_ok
+order cas3-froid SKU-001 1 tok_ok
 ```
 
 Lire l'état en base avec le préfixe `cas3-%` (requête de la section Préparation).

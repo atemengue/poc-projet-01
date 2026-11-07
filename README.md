@@ -98,18 +98,21 @@ docker compose -f sync/docker-compose.yml up -d --wait
 ```bash
 curl -X POST localhost:3000/orders -H 'content-type: application/json' -d '{
   "customerId": "c1",
-  "items": [{ "sku": "SKU-001", "quantity": 2 }],
+  "items": ["SKU-001", "SKU-003"],
+  "quantity": 2,
   "paymentInformation": { "cardToken": "tok_ok" },
   "shippingAddress": { "line1": "1 rue X", "city": "Montréal" }
 }'
 ```
+
+Forme de l'énoncé : `items` est une liste de SKU et `quantity` s'applique à chaque article (ici 2 × SKU-001 et 2 × SKU-003).
 
 Réponse attendue : `201` avec `"status":"CONFIRMED","completed":true`. Suivre la commande : `curl localhost:3000/orders/<orderId>`.
 
 | Pour obtenir | Modifier la requête |
 |---|---|
 | un paiement refusé (`REJECTED`, `PAYMENT_DECLINED`) | `"cardToken": "tok_declined"` |
-| un stock insuffisant (`REJECTED`, `INSUFFICIENT_STOCK`, paiement annulé) | `{ "sku": "SKU-LOW", "quantity": 51 }` |
+| un stock insuffisant (`REJECTED`, `INSUFFICIENT_STOCK`, paiement annulé) | `"items": ["SKU-LOW"], "quantity": 51` |
 | une panne de dépendance (`502`, commande bloquée en `ACCEPTED`) | arrêter Inventory avant : `docker compose -f sync/docker-compose.yml stop inventory` (puis `start inventory`) |
 
 Tests unitaires : `(cd sync && npm test)`.
