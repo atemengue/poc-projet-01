@@ -133,5 +133,17 @@ Toutes les vérifications V1 à V16 sont passées. Écarts et corrections apport
 | M6 | `POST /orders` répond avant la publication de `OrderCreated` (la commande et l'événement sont déjà durables dans l'outbox). | Choix assumé : la latence de réponse HTTP (H3c) ne contient pas l'attente de la confirmation du broker. Un échec de publication est rattrapé par le balayage. | Proposition |
 | M7 | `reset` doit vider les files avant la base : un message restant recréerait des lignes après le vidage. | `reset.js` purge les files RabbitMQ (API d'administration) puis vide la base ; si RabbitMQ ne répond pas (projet `sync/`), la purge est sautée. | Proposition |
 | M8 | Les compteurs de l'interface RabbitMQ (et de son API) se rafraîchissent toutes les 5 s environ. | Rien à corriger : lire l'état réel en base ou attendre le rafraîchissement. | Constat |
+| M9 | Jaeger a de nouveau été tué faute de mémoire (20 h 41) malgré le plafond de M4 ; Grafana n'affichait plus aucun service (`no such host jaeger`). Causes : une commande `async/` produit environ 100 spans (surtout des requêtes SQL), donc 20 000 traces dépassent 1 Go ; et chaque appel à `/health` (toutes les 2 s) et à `/metrics` (toutes les 5 s) crée une trace, soit environ 3,5 traces/s de bruit pour 5 services, même sans commande. | **Proposées, non appliquées** (§8). Jaeger redémarré à la main. | Constat |
+
+## 8. Corrections proposées pour un bon fonctionnement du banc d'essai (à appliquer)
+
+Notées le 2026-11-07, à la suite de M9. À appliquer avant les mesures, identiquement pour `sync/` et `async/`.
+
+| # | Correction | Fichiers | Effet attendu | État |
+|---|---|---|---|---|
+| C-1 | Ne plus tracer `/health` et `/metrics` (option `ignoreIncomingRequestHook` de l'instrumentation HTTP). | `sync/lib/telemetry.js`, `async/lib/telemetry.js` (même changement) | Supprime le bruit permanent ; Jaeger ne contient que des commandes | À faire |
+| C-2 | Jaeger : `MEMORY_MAX_TRACES=5000`, `mem_limit` 1,5 Go. | `common/infra/docker-compose.yml` | Assez de traces pour inspecter un essai ; Jaeger ne tombe plus | À faire |
+| C-3 | Échantillonner les traces pendant les runs de charge (par exemple 10 %, `OTEL_TRACES_SAMPLER=parentbased_traceidratio`), même taux pour les deux variantes. | `docker-compose.yml` des deux projets | Tracer 100 % des commandes coûte du CPU aux services (C5) et pèse sur les mesures ; le taux de traces complètes de H5 se mesurerait alors sur l'échantillon | À décider (D15) |
+| C-4 | Vérifier que la pile d'observabilité tourne avant chaque run (Jaeger, Collector, Prometheus) et relancer le Collector si Jaeger a été recréé (sa file d'export peut rester pleine, M4). | protocole de run (`run-scenario.js`, étape 7) | Un run n'est pas mené avec une observabilité morte sans qu'on le sache | À faire à l'étape 7 |
 
 Premier repère (essai à blanc `dry-async-01`, 100 cmd/s pendant 1 min, **jamais cité dans l'ADR**) : 6 001 commandes, drainage en moins de 1 s, `verify` OK, p95 d'acceptation 125 ms (contre 72 ms pour `dry-sync-01`), avec des pics ponctuels de p95 vers 20 s et 50 s, encore inexpliqués.

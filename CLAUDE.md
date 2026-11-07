@@ -175,6 +175,7 @@ k6 n'est pas installé sur la machine de développement : l'exécuter via Docker
 | D8 | Durée de S1, forme du pic de S2 | S1 : 3 min ; S2 : montée 2 min puis palier 5 min |
 | D12 | Mélange de charge | 3 % de paiements refusés, 2 % sur `SKU-LOW` |
 | D13 | Plafond de VUs k6 au-delà de la saturation (S2) | À trancher avant S2. Constat (C5) : `sync/` sature vers 250–300 cmd/s, k6 atteint son plafond de VUs et perd des itérations, ce qui rendrait le run invalide par la règle des 1 % à cause du banc d'essai. Pistes : délai maximal côté k6 (ex. 10 s, la requête compte comme échec) ou plus de VUs (~10 000, mémoire de k6). |
+| D15 | Échantillonnage des traces pendant les runs de charge | À trancher avant S1/S2 (même taux pour A et B, ex. 10 %). Tracer 100 % coûte du CPU aux services (C5) et a fait tomber Jaeger (M4, M9). Corrections C-1 à C-4 notées dans `docs/async-mise-en-place.md` §8. |
 | D14 | Ordre d'arrivée des événements chez Order (`async/`) | « Noter le fait, puis décider » (validé le 2026-11-07) : chaque événement enregistre son fait, puis Order tente la décision (confirmer ou rejeter pour stock insuffisant) ; le second arrivé décide. Demande `markStockInsufficient` et la condition `stock_status='INSUFFICIENT'` dans le rejet, dans les deux `domain.js`. |
 
 Si une de ces décisions a été tranchée depuis, mets ce tableau à jour plutôt que de t'y fier.
