@@ -188,6 +188,8 @@ Sources : `run.json` (validité, `faultTiming`, k6 par phase), `latency.json` (`
 |---|---|---|
 | async | **INVALIDE** : 9 310 itérations perdues par k6 (4,38 % ≥ 1 %) | `results/async/s2/rep-1/` |
 | sync | **VALIDE** : 294 itérations perdues (0,14 %) | `results/sync/s2/rep-1/` |
+| async, répétition 3 | Classée « valide sous saturation » par le script ; **invalide** après examen (k6 à 1 307 % de CPU, préchauffage dégradé) | `results/async/s2/rep-3/` |
+| async, répétition 2 | **INVALIDE** : 1,09 % d'itérations perdues (k6 préparé avec 3 000 VUs, marge de 20 %) ; VUs au plafond (2 999 / 3 000) mais ressources de k6 non relevées, donc non reclassable « valide sous saturation » (PC7) | `results/async/s2/rep-2/` |
 
 **Statut** : le run async, invalide, est à refaire (CLAUDE.md §8) ; ses chiffres sont **indicatifs** : ils ne servent pas au verdict de H1, mais orientent la suite. Le run sync est valide.
 
@@ -216,6 +218,34 @@ CPU maximal des conteneurs pendant le run (`resources.json`, échantillons de `d
 | Shipping / Notification | 78 % / 72 % | 100 % |
 
 Critères de H1 sur le palier à 500 cmd/s, **à titre indicatif** : débit accepté 219,0 / 500 = 43,8 % (seuil ≥ 95 %) ; acceptation p95 371 s (seuil < 1 s) ; violations de I1 : 0 (seuil 0).
+
+### async, répétition 2 (invalide de justesse) : mesures par palier
+
+| Palier (offert) | Reçu/s | Accepté/s | Acceptation p95 | Réponse HTTP p95 (k6) | Abandons côté client |
+|---|---|---|---|---|---|
+| 50 (préchauffage) | 50,0 | 48,7 | 65 ms | 7 ms | 0 |
+| 100 | 99,6 | 96,8 | 105 ms | 26 ms | 0 |
+| **200** | 199,1 | 193,5 | **1,7 s** | 452 ms | 0 |
+| 300 | 299,1 | 290,3 | **375 s** | 983 ms | 0 |
+| 400 | 399,0 | 386,3 | 375 s | 1,9 s | 0 |
+| **500** (fenêtre du verdict) | **270,9** | **262,8** | **370 s** | 5,0 s | 130 268 |
+
+Drainage : 334 s, toutes les commandes terminées. Invariants : I1 à I8 respectés, 2 violations de I9 (artefact de `now()`). CPU maximal : PostgreSQL 213 % (limite 200 %, saturé), Order 124 % (saturé), Inventory 99 %, Payment 96 %, RabbitMQ 157 %, Shipping 82 %, Notification 81 %.
+
+Critères de H1 à 500 cmd/s : débit accepté 262,8 / 500 = **52,6 %** (seuil ≥ 95 %) ; acceptation p95 **370 s** (seuil < 1 s) ; I1 : 0. Les deux répétitions async disent la même chose : décrochage dès 200 cmd/s, acceptation à six minutes à partir de 300 cmd/s, base partagée et Order saturés. Le ratage des seuils est massif ; selon PC7, il resterait valable avec 1 % de charge en moins, à condition de prouver que k6 n'était pas saturé : c'est l'objet de la répétition 3, avec relevé des ressources de k6.
+
+### async, répétition 3 : classée « valide sous saturation » par le script, mais **à considérer comme invalide**
+
+`results/async/s2/rep-3/` : 52 919 itérations perdues (24,98 %), VUs au plafond (3 000 / 3 000), 97,5 % des requêtes mesurées au délai client. Le script l'a classée « valide sous saturation » (PC7), mais l'examen montre que **k6 a lui-même saturé la machine** :
+
+| Indice | Valeur | Lecture |
+|---|---|---|
+| CPU de k6 (`poc-k6-async-s2-r3`) | **1 307 %** (≈ 13 cœurs ; Docker dispose de 10 CPU) | k6 a consommé toute la machine |
+| Préchauffage (50 cmd/s) | 397 abandons, HTTP p95 5 s, acceptation p95 10,9 s | Anormal dès le départ (7 à 55 ms aux répétitions 1 et 2) : machine surchargée avant la montée en charge |
+| Conteneurs au-delà de leur limite | PostgreSQL 279 % (limite 200), Order 143 % (limite 100) | Sous cette contention, les relevés de `docker stats` ne sont plus fiables |
+| Reçu au palier à 500 | 66,8 cmd/s | Sans commune mesure avec les répétitions 1 (226) et 2 (271) |
+
+Ce run mesure une machine surchargée par k6, pas le comportement de l'async. Il n'est **pas utilisé**. Le critère de santé de k6 de PC7 (mémoire seule) l'a laissé passer : correction proposée, non appliquée, dans `docs/decisions-conception.md` (PC7). Cause probable : avec 3 000 VUs qui atteignent presque tous le délai de 5 s, k6 ouvre et ferme des centaines de connexions par seconde ; la marge de VUs de 20 % a aggravé sa consommation. Un autre programme a peut-être aussi chargé la machine dès le début (préchauffage dégradé).
 
 ### sync, répétition 1 (valide) : mesures par palier
 
@@ -279,4 +309,49 @@ Les itérations perdues viennent d'un système qui ne répond plus : à partir d
 
 | Hypothèse | Verdict | Justification |
 |---|---|---|
-| **H1** (async tient les trois seuils à 500 cmd/s, sync en rate au moins un) | **Non concluante pour l'instant — tendance : rejetée** | Run async invalide (4,38 % d'itérations perdues) : à refaire valide, puis trois répétitions. Indication : l'async rate deux seuils sur trois (43,8 % accepté, acceptation p95 371 s) ; le sync (valide) en rate aussi deux (70,6 %, 3,7 s) mais va nettement plus loin. Résultat contraire à la décision candidate (ADR-001), obtenu sur un banc d'essai dont la base unique partagée sature en premier sous l'async. |
+| **H1** (async tient les trois seuils à 500 cmd/s, sync en rate au moins un) | **Non concluante pour l'instant — tendance : rejetée** | Runs async invalides (répétitions 1 et 2 : 4,38 % puis 1,09 % d'itérations perdues, système saturé ; répétition 3 : k6 a saturé la machine). Aucun run async utilisable pour le verdict : la machine ne peut pas porter à la fois k6 et un système saturé à 500 cmd/s (limite du banc d'essai, A-15). Comment obtenir un run async exploitable reste à décider. Répétition 2 : 52,6 % accepté, acceptation p95 370 s. Indication : l'async rate deux seuils sur trois (43,8 % accepté, acceptation p95 371 s) ; le sync (valide) en rate aussi deux (70,6 %, 3,7 s) mais va nettement plus loin. Résultat contraire à la décision candidate (ADR-001), obtenu sur un banc d'essai dont la base unique partagée sature en premier sous l'async. |
+
+---
+
+## S5 — Livraison multiple (H4)
+
+*2026-11-08. Profil `s5` : préchauffage 1 min à 10 cmd/s, puis 1 min à 10 cmd/s (phase `measure`). Traces à 100 % (PC3). Trois runs par variante : **avec protection** (doublons, idempotence active), **référence** (`--no-duplicates` : sans doublons, pour le surcoût), **témoin** (`--witness` : doublons, protection désactivée, pour prouver que le test détecte les doublons). Doublons : en async, chaque événement est publié deux fois (`DUPLICATE_DELIVERY=2`) ; en sync, k6 renvoie chaque requête après la première réponse avec le même `Idempotency-Key` (PC5).*
+
+| Run | Fichiers |
+|---|---|
+| async, répétition 1 | `results/async/s5/rep-1/`, `rep-1-nodup/`, `rep-1-witness/` |
+| async, répétition 2 (protection et référence) | `results/async/s5/rep-2/`, `rep-2-nodup/` |
+| sync, répétition 1 | `results/sync/s5/rep-1/`, `rep-1-nodup/`, `rep-1-witness/` |
+
+Tous les runs sont **valides**.
+
+### Mesures
+
+| Run | Commandes | Complétion p50 / p95 | I7 (effets en double) | I1 | Commandes en double (même requête client) | Doublons écartés |
+|---|---|---|---|---|---|---|
+| async, protection, rép. 1 | 600 | — / 183 ms | **0** | 0 | 0 | 8 317 |
+| async, référence, rép. 1 | 601 | — / 1 393 ms (pics de la machine, voir plus bas) | 0 | 0 | 0 | 0 |
+| async, **témoin**, rép. 1 | 599 | — / 344 ms | **1 199** | 0 | 0 | 0 |
+| async, protection, rép. 2 | — | **112** / 144 ms | — | — | — | 8 333 |
+| async, référence, rép. 2 | — | **113** / 378 ms | — | — | — | 0 |
+| sync, protection, rép. 1 | 601 | — / 171 ms | 0 | 0 | **0** | ≈ 1 200 |
+| sync, référence, rép. 1 | 600 | — / 145 ms | 0 | 0 | 0 | (compteur faux, voir plus bas) |
+| sync, **témoin**, rép. 1 | 1 198 | — / 154 ms | **0** | 0 | **1 199** | 0 |
+
+Sources : `run.json` (`validity`, `duplicates`), `latency.json` (`measure`), `invariants.json` de chaque dossier. Les cases « — » n'ont pas été relevées.
+
+### Lecture
+
+1. **La protection fonctionne dans les deux variantes** : avec doublons, aucun effet en double en async (I7 = 0) et aucune commande en double en sync ; aucune violation de I1. **Les deux témoins prouvent que le test détecte les doublons** : I7 = 1 199 en async, 1 199 commandes en double en sync.
+2. **Les doublons ne se manifestent pas de la même façon.** En async, ils dupliquent les **effets** sur la même commande (paiements, réservations, expéditions, notifications) : I7 les voit. En sync, un renvoi du client crée une **seconde commande** : I7 ne la voit pas, d'où la mesure « commandes en double par requête client ».
+3. **Volume à traiter** : l'async écarte environ **7 doublons par commande** (chaque événement livré deux fois à chaque consommateur), le sync **1** (le renvoi du client). La protection async est plus sollicitée, et elle repose sur un mécanisme à maintenir dans chaque consommateur (`processed_events` dans la même transaction que l'effet).
+4. **Surcoût de la protection en async : nul à la médiane** (complétion p50 112 ms avec doublons contre 113 ms sans, répétition 2). Écarter un doublon revient à une insertion refusée dans la même transaction.
+5. **Le p95 à 10 cmd/s est dominé par des pics de la machine.** La phase mesurée ne compte que 600 commandes : le p95 ne regarde que les 30 plus lentes, et un arrêt passager de quelques secondes suffit à le faire grimper (référence async, répétition 1 : p95 de tranche à 2,6 s à 30 s et 2,3 s à 100 s, normal ailleurs). Dans les deux répétitions, la **référence** (sans doublons) a un p95 **plus élevé** que le run avec doublons ; elle passe toujours en second, sur des conteneurs recréés (le réglage des doublons change). Effet d'ordre probable, à vérifier en inversant l'ordre à la répétition 3.
+6. **Sync, pour comparaison (hors verdict)** : surcoût de la protection +18 % au p95 (171 contre 145 ms, soit 26 ms, dans la zone de bruit). Le renvoi double le nombre de requêtes HTTP ; le second est servi depuis `idempotency_keys`.
+7. **Défaut de mesure corrigé en cours de route** : le compteur « doublons écartés » de la référence sync (répétition 1) affichait la valeur du run précédent, les conteneurs n'étant pas redémarrés entre deux runs aux réglages identiques. `run-scenario.js` mesure désormais la différence du compteur entre le début et la fin du run (vérifié à la répétition 2 async : 8 333 puis 0).
+
+### Verdict
+
+| Hypothèse | Verdict | Justification |
+|---|---|---|
+| **H4** (avec idempotence : I7 = 0, I1 = 0, surcoût de complétion p95 < 10 % ; le témoin doit montrer des doublons) | **Supportée — provisoire** (2 répétitions de la protection et de la référence, 1 du témoin) | I7 = 0 et I1 = 0 avec protection ; témoin I7 = 1 199 ; surcoût p95 négatif dans les deux répétitions (−86,8 %, −62 %), donc sous 10 %. **Réserve** : à 10 cmd/s, le surcoût se lit sur la médiane (0 %), le p95 étant dominé par les pics de la machine. Répétition 3 à faire en inversant l'ordre (référence d'abord). |

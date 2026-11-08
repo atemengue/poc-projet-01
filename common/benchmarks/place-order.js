@@ -46,7 +46,11 @@ const clientTimeouts = new Counter('client_timeouts');
 // lent : quand les requêtes s'allongent jusqu'au délai client, k6 perdait des itérations faute
 // de VU prêt (essai sync S3, 411 itérations perdues, toutes dans la phase de panne).
 const timeoutSeconds = Number.parseFloat(CLIENT_TIMEOUT) * (CLIENT_TIMEOUT.endsWith('ms') ? 0.001 : 1);
-const vusFor = (peak) => Math.min(MAX_VUS, Math.max(50, Math.ceil(peak * timeoutSeconds)));
+// Marge de 20 % au-delà de débit × délai : sans marge, un système saturé (toutes les requêtes au
+// délai client) faisait encore déborder k6 (async S2, 4,38 % d'itérations perdues). 500 × 5 × 1,2
+// = 3 000 VUs pour S2, soit le plafond.
+const VU_MARGIN = 1.2;
+const vusFor = (peak) => Math.min(MAX_VUS, Math.max(50, Math.ceil(peak * timeoutSeconds * VU_MARGIN)));
 
 function placeOrderScenario() {
   if (scenarioProfile) {
