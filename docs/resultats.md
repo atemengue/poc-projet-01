@@ -92,3 +92,45 @@ Sources : `run.json` (validité, panne, k6), `latency.json` (`byPhase.fault`), `
 | Hypothèse | Verdict | Justification |
 |---|---|---|
 | **H3a** (async : ≥ 99 % des commandes de la panne terminées en moins de 2 min après le retour de Shipping) | **Supportée — provisoire** (1 répétition sur 3) | async : 100 % terminées, drainage terminé avant la fin du run (90 s après le retour de Shipping) ; sync : ≈ 3 % complétées. Reste à mesurer précisément le délai après le retour (`max(completed_at)` − fin de panne) et à faire les répétitions 2 et 3. |
+
+---
+
+## S4 — Payment arrêté 30 s (H3b)
+
+*Répétition 1, 2026-11-08. Charge : 100 cmd/s ; Payment arrêté 30 s au milieu du run (profil `s4`). Traces échantillonnées à 10 % (PC3).*
+
+| Run | Panne (UTC) | Fichiers |
+|---|---|---|
+| sync | 08:16:30 → 08:17:00 | `results/sync/s4/rep-1/` |
+| async | 08:25:01 → 08:25:31 | `results/async/s4/rep-1/` |
+
+Les deux runs sont **valides** (aucune itération perdue par k6, panne de 30 s à l'heure prévue).
+
+### Mesures
+
+| Mesure | sync | async |
+|---|---|---|
+| Commandes reçues pendant la panne (phase `fault`) | 3 000 | 3 000 |
+| **Perdues** (envoyées par k6, absentes de la base) | **0** | **0** |
+| **Terminées** (`CONFIRMED` ou `REJECTED`) | **24** (premières millisecondes de la fenêtre, avant l'arrêt effectif de Payment) | **3 000** (2 847 confirmées, 88 paiements refusés, 65 stocks insuffisants) |
+| **Bloquées** (sans état final après drainage) | **2 976** en `RECEIVED` | **0** |
+| Réponse au client pendant la panne (k6, p95) | `502` en 14 ms (3 abandons) | `202` en 4 ms (0 abandon) |
+| Acceptation p95 des commandes de la panne | — (jamais acceptées) | 30,4 s (attente du retour de Payment) |
+| **Acceptation p95 des commandes reçues après la panne** (phase `after`) | **58 ms** | **5,6 s** |
+| Fin du drainage | « plus de progression depuis 30 s » : commandes bloquées | toutes les commandes terminées avant la fin du run |
+| Invariants (tout le run) | I10 violé : 3 112 commandes jamais terminées | I9 : 1 violation (artefact de `now()`, `docs/hypotheses-assumption.md` §4) |
+
+Sources : `run.json` (validité, panne, k6, commandes perdues), `latency.json` (`byPhase.fault`, `byPhase.after`), `invariants.json` de chaque dossier.
+
+### Lecture
+
+1. **Pendant la panne**, async **prend en compte** toutes les commandes (`202`) et les termine toutes au retour de Payment ; sync les **refuse** (`502`) et, sans nouvelle tentative (AS5), les laisse bloquées en `RECEIVED` pour toujours. Aucune variante ne perd de commande (chacune est enregistrée avant l'appel à Payment ou l'envoi de l'événement), et aucune ne confirme sans paiement (I1 à I8 respectés des deux côtés).
+2. **Coût caché de l'async, après la panne** : les commandes en attente sont traitées dans l'ordre, avant les nouvelles. Les commandes arrivées juste après la panne attendent 5,6 s au p95 (contre 58 ms en sync) : pendant un moment, l'async dépasse le critère p95 < 1 s pour des commandes qui n'ont pas subi la panne. Le redémarrage de Payment à froid (connexions à la base, C2) contribue aussi.
+3. **Compromis** : l'async sauve les commandes de la panne, au prix d'un ralentissement temporaire des suivantes ; le sync reste rapide pour la suite, au prix de commandes abandonnées pour le client (erreur `502`, commande bloquée). Ce compromis n'entre pas dans le verdict de H3b ; il doit figurer dans l'ADR (*Trade-offs*).
+4. Comme en S4b, l'écart dépend de la règle « budget de nouvelles tentatives 0 » : le sync aurait besoin d'un mécanisme ajouté pour rattraper les commandes de la panne.
+
+### Verdict
+
+| Hypothèse | Verdict | Justification |
+|---|---|---|
+| **H3b** (async : 0 perdue et ≥ 99 % des commandes de la panne dans un état final moins de 2 min après le retour de Payment) | **Supportée — provisoire** (1 répétition sur 3) | async : 0 perdue, 3 000 / 3 000 en état final, drainage terminé avant la fin du run (90 s après le retour de Payment) ; sync : 2 976 bloquées sur 3 000. Reste à mesurer précisément le délai après le retour et à faire les répétitions 2 et 3. |
