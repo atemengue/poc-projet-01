@@ -177,3 +177,106 @@ Sources : `run.json` (validité, `faultTiming`, k6 par phase), `latency.json` (`
 | Hypothèse | Verdict | Justification |
 |---|---|---|
 | **H3c** (async : réponse HTTP p95 < 200 ms et 0 abandon ; sync : plus de 50 % d'abandons) | **Supportée — provisoire** (1 répétition sur 3) | async : 3 ms et 0 abandon ; sync : 87,6 % d'abandons. Compromis hors verdict : acceptation à ≈ 40 s pendant la lenteur et 7,5 s juste après en async. |
+
+---
+
+## S2 — Pic de trafic (H1)
+
+*Répétition 1, 2026-11-08. Profil `s2` : préchauffage 1 min à 50 cmd/s, paliers de 1 min à 100, 200, 300, 400 cmd/s, puis 5 min à 500 cmd/s (fenêtre du verdict). Délai client de 5 s (PC2), 2 500 VUs préparés d'avance (PC6). Traces échantillonnées à 10 % (PC3).*
+
+| Run | Validité | Fichiers |
+|---|---|---|
+| async | **INVALIDE** : 9 310 itérations perdues par k6 (4,38 % ≥ 1 %) | `results/async/s2/rep-1/` |
+| sync | **VALIDE** : 294 itérations perdues (0,14 %) | `results/sync/s2/rep-1/` |
+
+**Statut** : le run async, invalide, est à refaire (CLAUDE.md §8) ; ses chiffres sont **indicatifs** : ils ne servent pas au verdict de H1, mais orientent la suite. Le run sync est valide.
+
+### async, répétition 1 (invalide) : mesures par palier
+
+| Palier (offert) | Reçu/s | Accepté/s | Acceptation p95 | Réponse HTTP p95 (k6) | Abandons côté client |
+|---|---|---|---|---|---|
+| 50 (préchauffage) | 50,0 | 48,6 | 201 ms | 55 ms | 0 |
+| 100 | 99,9 | 97,1 | 218 ms | 99 ms | 0 |
+| **200** | 199,2 | 192,8 | **10,9 s** | **1,8 s** | 0 |
+| 300 | 299,1 | 290,1 | **403 s** | 1,4 s | 0 |
+| 400 | **172,3** | 167,0 | 405 s | 5,0 s | 15 275 |
+| **500** (fenêtre du verdict) | **225,7** | **219,0** | **371 s** | 5,1 s | 137 380 |
+
+« Accepté/s » compte les commandes reçues pendant le palier qui ont fini par être acceptées, éventuellement des minutes plus tard. Drainage après la charge : 273 s, toutes les commandes terminées (aucune bloquée). Invariants : I1 à I8 respectés ; 3 violations de I9 (artefact de `now()`, `docs/hypotheses-assumption.md` §4).
+
+CPU maximal des conteneurs pendant le run (`resources.json`, échantillons de `docker stats` ; au-delà de la limite = au plafond, artefact d'échantillonnage) :
+
+| Conteneur | CPU max | Limite |
+|---|---|---|
+| **PostgreSQL** | **222 %** | 200 % |
+| **Order** | **116 %** | 100 % |
+| Payment | 98 % | 100 % |
+| Inventory | 91 % | 100 % |
+| RabbitMQ | 164 % | 200 % |
+| Shipping / Notification | 78 % / 72 % | 100 % |
+
+Critères de H1 sur le palier à 500 cmd/s, **à titre indicatif** : débit accepté 219,0 / 500 = 43,8 % (seuil ≥ 95 %) ; acceptation p95 371 s (seuil < 1 s) ; violations de I1 : 0 (seuil 0).
+
+### sync, répétition 1 (valide) : mesures par palier
+
+| Palier (offert) | Reçu/s | Accepté/s | Acceptation p95 | Réponse HTTP p95 (k6) | Abandons côté client |
+|---|---|---|---|---|---|
+| 50 (préchauffage) | 50,0 | 48,5 | 63 ms | 141 ms | 0 |
+| 100 | 99,6 | 96,5 | 57 ms | 127 ms | 0 |
+| 200 | 199,1 | 192,8 | 75 ms | 178 ms | 0 |
+| **300** | 298,0 | 288,7 | **619 ms** | **1,4 s** | 0 |
+| 400 | **344,9** | 335,1 | **5,2 s** | 5,0 s | 8 820 |
+| **500** (fenêtre du verdict) | **363,8** | **352,8** | **3,7 s** | 5,0 s | 98 177 |
+
+Drainage après la charge : 1 s, toutes les commandes terminées (aucune bloquée). Invariants : tous respectés.
+
+CPU maximal des conteneurs (`resources.json`) : Order 113 % (limite 100 %, **saturé**), PostgreSQL 146 % (limite 200 %, chargé mais pas saturé), Payment 67 %, Inventory 62 %, Notification 48 %, Shipping 46 %.
+
+### Comparaison sync / async
+
+| Palier | Acceptation p95 sync | Acceptation p95 async (invalide) | HTTP p95 sync | HTTP p95 async |
+|---|---|---|---|---|
+| 100 cmd/s | 57 ms | 218 ms | 127 ms | 99 ms |
+| 200 cmd/s | **75 ms** | **10,9 s** | 178 ms | 1,8 s |
+| 300 cmd/s | **619 ms** | **403 s** | 1,4 s | 1,4 s |
+| 400 cmd/s | 5,2 s | 405 s | 5,0 s | 5,0 s |
+| 500 cmd/s | **3,7 s** | **371 s** | 5,0 s | 5,1 s |
+
+| Palier à 500 cmd/s | sync | async (invalide) | Seuil de H1 |
+|---|---|---|---|
+| Débit accepté / offert | **352,8 / 500 = 70,6 %** | 219,0 / 500 = 43,8 % | ≥ 95 % |
+| Acceptation p95 | **3,7 s** | 371 s | < 1 s |
+| Violations de I1 | 0 | 0 | 0 |
+| Drainage après la charge | **1 s** | 273 s | — |
+| Commandes bloquées | 0 | 0 | — |
+
+| Conteneur (limite) | CPU max sync | CPU max async (invalide) |
+|---|---|---|
+| PostgreSQL (200 %) | 146 % | **222 % (saturé)** |
+| Order (100 %) | **113 % (saturé)** | **116 % (saturé)** |
+| Payment (100 %) | 67 % | 98 % |
+| Inventory (100 %) | 62 % | 91 % |
+| Shipping / Notification (100 %) | 46 % / 48 % | 78 % / 72 % |
+| RabbitMQ (200 %) | — | 164 % |
+
+### Lecture (provisoire)
+
+1. **Vue d'ensemble.** Aucune des deux variantes ne tient 500 cmd/s sur ce banc d'essai. Le **sync tient plus longtemps et se dégrade moins** : il reste sous le critère p95 < 1 s jusqu'à 300 cmd/s (l'async décroche dès 200), accepte 61 % de commandes de plus à 500 cmd/s (353 contre 219 par seconde), et sa latence reste bornée à quelques secondes quand celle de l'async s'emballe à plusieurs minutes. Les deux se dégradent différemment : le sync échoue côté client (abandons au-delà de 5 s) mais le serveur continue et tout est terminé 1 s après la charge ; l'async répond puis accumule, et met 4,5 min à se vider. À la question de l'énoncé (« quelle architecture se dégrade le plus progressivement ? »), ce run répond **le synchrone**.
+2. **Goulots différents.** En sync, le goulot est **Order seul** (il orchestre toute la chaîne sur un cœur, comme dans l'essai C5), la base et les autres services gardent de la marge. En async, **la base partagée sature en plus d'Order**, et tous les services travaillent davantage (Payment 98 % contre 67 %, Inventory 91 % contre 62 %), RabbitMQ consommant en plus 1,6 cœur : pour le même travail métier, l'async consomme nettement plus de ressources (outbox, idempotence, publication et consommation, une transaction par événement). Le goulot du sync se lèverait en ajoutant des instances d'Order ; celui de l'async demanderait de répartir la base.
+3. **L'async décroche dès 200 cmd/s** sur ce banc d'essai : la réponse HTTP passe à 1,8 s et l'acceptation à 10,9 s au p95 ; à 300 cmd/s, les commandes sont acceptées plus de 6 minutes après leur arrivée. Le run sync (valide) décroche, lui, vers 300 cmd/s (acceptation p95 619 ms, réponse HTTP 1,4 s), au-delà à 400.
+4. **Le goulot principal est PostgreSQL**, partagé par tous les services et saturé ; **Order** sature en même temps. Pour une commande, l'async fait beaucoup plus d'écritures que le sync : une ligne d'outbox par événement puis une transaction pour la marquer publiée (AS7), une ligne `processed_events` par événement reçu, une transaction par événement traité, avec environ six événements par commande. Order traite aussi la requête HTTP et trois à quatre événements par commande sur un seul cœur.
+5. **Ce coût est en partie celui du style** : l'outbox et l'idempotence sont nécessaires pour tenir l'invariant en asynchrone (question de S5). Il apparaît ici en CPU de base de données.
+6. **Il dépend aussi de nos choix d'implémentation** (par exemple la transaction supplémentaire qui marque l'outbox publiée) : un allègement serait une expérience séparée et documentée, pas une correction silencieuse.
+7. **Limites du banc d'essai** : une base PostgreSQL unique partagée par les cinq services (menace à la validité, `docs/hypotheses-assumption.md` §7), une seule machine, un cœur par service. Dans une architecture réelle avec une base par service, le goulot serait réparti. Conclure sur **ce banc d'essai**, pas sur l'événementiel en général.
+8. **La sûreté tient même en pleine saturation** : aucune confirmation sans paiement ni stock (I1 à I8 respectés), aucune commande perdue ni bloquée.
+9. **Contraire à la décision candidate** (ADOPT EVENT-DRIVEN, ADR-001) : à confirmer par la répétition valide et par le run sync avant toute conclusion.
+
+### Point de protocole à régler (validité)
+
+Les itérations perdues viennent d'un système qui ne répond plus : à partir de 400 cmd/s, presque toutes les requêtes atteignent le délai client de 5 s, et k6 a alors besoin d'exactement débit × délai = 2 500 VUs, sans aucune marge (PC6). Toute variante qui sature déborde k6 de la même façon et rend le run invalide par la règle des 1 %. À décider avant de refaire S2 : marge de VUs au-delà de débit × délai (le plafond actuel de 3 000 VUs en laisse), ou traitement explicite de ce cas dans la règle de validité.
+
+### Verdict
+
+| Hypothèse | Verdict | Justification |
+|---|---|---|
+| **H1** (async tient les trois seuils à 500 cmd/s, sync en rate au moins un) | **Non concluante pour l'instant — tendance : rejetée** | Run async invalide (4,38 % d'itérations perdues) : à refaire valide, puis trois répétitions. Indication : l'async rate deux seuils sur trois (43,8 % accepté, acceptation p95 371 s) ; le sync (valide) en rate aussi deux (70,6 %, 3,7 s) mais va nettement plus loin. Résultat contraire à la décision candidate (ADR-001), obtenu sur un banc d'essai dont la base unique partagée sature en premier sous l'async. |
