@@ -7,7 +7,9 @@
     "reset": "node scripts/reset.js",
     "verify": "node scripts/verify-invariants.js",
     "latency": "node scripts/latency.js",
-    "parity": "node scripts/check-parity.js"
+    "parity": "node scripts/check-parity.js",
+    "scenario": "node scripts/run-scenario.js",
+    "traces": "node scripts/trace-completeness.js"
   },
   "keywords": [],
   "author": "",

@@ -46,6 +46,8 @@ Absent (dossiers vides ou fichiers manquants) :
 
 **Défaut de mesure corrigé (2026-11-03)** : `received_at` était écrit à l'INSERT (`now()`), après l'attente du pool et la lecture des prix. Il vaut désormais l'instant d'arrivée de la requête (hook `onRequest` de `POST /orders`), passé à `createOrder`, qui l'exige. `async/` doit faire de même côté transport. Détail : `docs/cas-de-comprehension.md`, C3.
 
+**Défaut de mesure connu, non corrigé (2026-11-08)** : `now()` (début de transaction) au lieu de `clock_timestamp()` pour `accepted_at`/`confirmed_at`/`rejected_at`/`completed_at` dans le `domain.js` d'Order ; en async, deux événements concurrents peuvent donner `confirmed_at < accepted_at` (I9). Détail et correction proposée : `docs/hypotheses-assumption.md` §4 (définition des latences).
+
 Les crochets de l'étape 7 (section 8) n'existent donc pas encore. Dans la section 9, fonctionnent : les deux premières commandes, `docker compose up -d --build` dans `sync/` et `async/`, `reset.js` et `verify-invariants.js`.
 
 Autres écarts :

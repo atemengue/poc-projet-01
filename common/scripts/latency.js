@@ -1,7 +1,10 @@
 // Latences et débit d'un run, calculés depuis la base (mêmes requêtes pour sync/ et async/,
 // CLAUDE.md §6). Les commandes du run sont celles dont customer_id commence par « <RUN_ID>- ».
 //
-//   node common/scripts/latency.js --run <RUN_ID> [--slice <secondes>] [--out results/.../latency.json]
+//   node common/scripts/latency.js --run <RUN_ID> [--phase measure[,fault]] [--slice <secondes>] [--out …]
+//
+// --phase : ne garde que les commandes de ces phases (customerId = <RUN_ID>-<phase>-<n>, profils
+// de scénario de common/benchmarks/profiles.js). Sans --phase : toutes les commandes du run.
 //
 // --slice N : découpe aussi le run en tranches de N secondes (selon received_at), pour lire
 // chaque palier d'une montée en charge séparément.
@@ -28,7 +31,7 @@ const percentiles = (col) => `
            (ORDER BY extract(epoch FROM ${col} - received_at) * 1000) AS p,
          max(extract(epoch FROM ${col} - received_at) * 1000) AS max
     FROM orders
-   WHERE customer_id LIKE $1 AND ${col} IS NOT NULL`;
+   WHERE customer_id LIKE ANY($1::text[]) AND ${col} IS NOT NULL`;
 
 // Par tranche de `seconds` depuis la première commande : débit reçu et accepté, latence
 // d'acceptation et de complétion, commandes restées non terminées (RECEIVED / ACCEPTED).
@@ -36,7 +39,7 @@ const SLICES = `
   WITH t AS (
     SELECT floor(extract(epoch FROM received_at - min(received_at) OVER ()) / $2)::int * $2 AS start_s,
            status, accepted_at, completed_at, received_at
-      FROM orders WHERE customer_id LIKE $1)
+      FROM orders WHERE customer_id LIKE ANY($1::text[]))
   SELECT start_s,
          count(*)::int AS received,
          count(*) FILTER (WHERE accepted_at IS NOT NULL)::int AS accepted,
@@ -49,8 +52,13 @@ const SLICES = `
            FILTER (WHERE completed_at IS NOT NULL) AS completion_p95
     FROM t GROUP BY start_s ORDER BY start_s`;
 
-export async function measureSlices(client, runId, seconds) {
-  const { rows } = await client.query(SLICES, [`${runId}-%`, seconds]);
+/** Motifs LIKE des customerId d'un run, éventuellement limités à certaines phases. */
+export function patterns(runId, phases) {
+  return phases?.length ? phases.map((p) => `${runId}-${p}-%`) : [`${runId}-%`];
+}
+
+export async function measureSlices(client, runId, seconds, phases) {
+  const { rows } = await client.query(SLICES, [patterns(runId, phases), seconds]);
   return rows.map((r) => ({
     startS: r.start_s,
     receivedPerSecond: r.received / seconds,
@@ -62,18 +70,21 @@ export async function measureSlices(client, runId, seconds) {
   }));
 }
 
-export async function measure(client, runId) {
-  const pattern = `${runId}-%`;
+export async function measure(client, runId, phases) {
+  const pattern = patterns(runId, phases);
 
   const { rows: byStatus } = await client.query(
     `SELECT status, coalesce(rejection_reason, '') AS reason, count(*)::int AS n
-       FROM orders WHERE customer_id LIKE $1 GROUP BY 1, 2 ORDER BY 1, 2`, [pattern]);
+       FROM orders WHERE customer_id LIKE ANY($1::text[]) GROUP BY 1, 2 ORDER BY 1, 2`, [pattern]);
 
   const { rows: [window] } = await client.query(
     `SELECT count(*)::int AS total, min(received_at) AS first, max(received_at) AS last,
             extract(epoch FROM max(received_at) - min(received_at)) AS seconds,
-            count(*) FILTER (WHERE accepted_at IS NOT NULL)::int AS accepted
-       FROM orders WHERE customer_id LIKE $1`, [pattern]);
+            count(*) FILTER (WHERE accepted_at IS NOT NULL)::int AS accepted,
+            count(*) FILTER (WHERE status IN ('CONFIRMED', 'REJECTED'))::int AS finished,
+            count(*) FILTER (WHERE status IN ('RECEIVED', 'ACCEPTED'))::int AS blocked,
+            count(*) FILTER (WHERE status = 'CONFIRMED' AND completed_at IS NULL)::int AS confirmed_not_completed
+       FROM orders WHERE customer_id LIKE ANY($1::text[])`, [pattern]);
 
   const latency = {};
   for (const [stage, col] of STAGES) {
@@ -85,7 +96,13 @@ export async function measure(client, runId) {
   const seconds = Number(window.seconds) || 0;
   return {
     runId,
+    phases: phases ?? null,
     total: window.total,
+    // H3b : terminées (état final), bloquées (pas d'état final) ; les perdues se comptent en
+    // comparant au nombre de requêtes envoyées par k6 (run-scenario.js).
+    finished: window.finished,
+    blocked: window.blocked,
+    confirmedNotCompleted: window.confirmed_not_completed,
     firstReceivedAt: window.first,
     lastReceivedAt: window.last,
     receivedPerSecond: seconds > 0 ? window.total / seconds : null,
@@ -99,8 +116,9 @@ const ms = (v) => (v === null || v === undefined ? '—' : `${Math.round(v)} ms`
 const rate = (v) => (v === null ? '—' : `${v.toFixed(1)} cmd/s`);
 
 function print(m) {
-  console.log(`run ${m.runId} : ${m.total} commande(s), reçues de ${m.firstReceivedAt?.toISOString?.() ?? '—'} à ${m.lastReceivedAt?.toISOString?.() ?? '—'}`);
+  console.log(`run ${m.runId}${m.phases ? ` (phases ${m.phases.join(', ')})` : ''} : ${m.total} commande(s), reçues de ${m.firstReceivedAt?.toISOString?.() ?? '—'} à ${m.lastReceivedAt?.toISOString?.() ?? '—'}`);
   console.log(`débit reçu : ${rate(m.receivedPerSecond)}   débit accepté : ${rate(m.acceptedPerSecond)}\n`);
+  console.log(`terminées : ${m.finished}   bloquées (RECEIVED/ACCEPTED) : ${m.blocked}   confirmées non complétées : ${m.confirmedNotCompleted}\n`);
   console.log('statuts :');
   for (const s of m.byStatus) console.log(`  ${s.status.padEnd(10)} ${s.reason.padEnd(20)} ${s.n}`);
   console.log('\nlatences (depuis received_at) :');
@@ -120,20 +138,21 @@ function print(m) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { values: args } = parseArgs({ options: { run: { type: 'string' }, out: { type: 'string' }, slice: { type: 'string' } } });
+  const { values: args } = parseArgs({ options: { run: { type: 'string' }, out: { type: 'string' }, slice: { type: 'string' }, phase: { type: 'string' } } });
   if (!args.run) {
-    console.error('usage : node common/scripts/latency.js --run <RUN_ID> [--slice <secondes>] [--out <fichier.json>]');
+    console.error('usage : node common/scripts/latency.js --run <RUN_ID> [--phase <p1,p2>] [--slice <secondes>] [--out <fichier.json>]');
     process.exit(2);
   }
   let client;
   try {
     client = await connect();
-    const m = await measure(client, args.run);
+    const phases = args.phase ? args.phase.split(',').map((p) => p.trim()).filter(Boolean) : undefined;
+    const m = await measure(client, args.run, phases);
     if (args.slice) {
       const seconds = Number(args.slice);
       if (!Number.isInteger(seconds) || seconds <= 0) throw new Error('--slice attend un nombre entier de secondes');
       m.sliceSeconds = seconds;
-      m.slices = await measureSlices(client, args.run, seconds);
+      m.slices = await measureSlices(client, args.run, seconds, phases);
     }
     if (m.total === 0) {
       console.error(`aucune commande pour le run « ${args.run} » : mesure inconclusive`);
