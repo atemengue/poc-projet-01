@@ -255,12 +255,12 @@ Une métrique **de verdict** décide ; une métrique **de diagnostic** explique 
 | ID | Verdict (supportée / rejetée / non concluante) | Preuve (fichier de `results/`) | Notes |
 |---|---|---|---|
 | H1 | — | — | — |
-| H2 | — | — | — |
-| H3a | — | — | — |
+| H2 | **Rejetée — provisoire** (1 répétition sur 3, 2026-11-08) | `results/sync/s1/rep-1/`, `results/async/s1/rep-1/` ; détail : `docs/resultats.md`, S1 | Complétion p95 : sync 146 ms, async 162 ms, écart 9,9 % < 20 %. Acceptation p95 de A : 68 ms (< 1 s). |
+| H3a | **Supportée — provisoire** (1 répétition sur 3, 2026-11-08) | `results/async/s4b/rep-1/`, `results/sync/s4b/rep-1/` ; détail : `docs/resultats.md`, S4b | async : 3 000/3 000 commandes de la panne terminées ; sync : 2 841 confirmées jamais complétées. Écart dû à la mise en file sans mécanisme ajouté, avec un budget de nouvelles tentatives à 0. |
 | H3b | — | — | — |
 | H3c | — | — | — |
 | H4 | — | — | — |
-| H5 | — | — | — |
+| H5 | **Rejetée — provisoire** (1 répétition sur 3, 2026-11-08) | `results/*/s1/rep-1/traces.json` ; détail : `docs/resultats.md`, S1 | Traces complètes : async 100 % (1 780 / 1 780), sync 100 % (1 846 / 1 846). Le coût est dans l'effort d'instrumentation. |
 | H6 | — | — | — |
 
 ---
