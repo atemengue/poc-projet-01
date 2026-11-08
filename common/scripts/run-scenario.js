@@ -244,6 +244,17 @@ try {
   if (await access(outDir).then(() => true, () => false)) throw new Error(`${outDir} existe déjà : on ne remplace jamais un résultat (choisir une autre --rep ou --tag)`);
   const run = { project, scenario, rep: Number(args.rep), witness: args.witness, runId, profile, events: [] };
 
+  // Rappel du scénario en cours et des hypothèses qu'il permet d'évaluer.
+  const rule = '─'.repeat(78);
+  console.log(`${rule}\n${profile.title}  [${project}${args.witness ? ', témoin' : ''}, répétition ${args.rep}]`);
+  console.log(`  Charge    : ${profile.load}`);
+  console.log(`  Action    : ${profile.action}`);
+  console.log(`  Question  : ${profile.question}`);
+  console.log(`  Durée     : ${totalSeconds(profile)} s de charge, puis drainage, invariants et mesures`);
+  console.log('  Hypothèses évaluées :');
+  for (const h of profile.hypotheses) console.log(`    - ${h}`);
+  console.log(`  Résultats : results/${outRel}/\n${rule}`);
+
   log(`${runId} : contrôles préalables`);
   run.preflight = await preflight(project, other);
   // Dossier créé seulement après les contrôles : un run refusé ne laisse pas de dossier vide.
