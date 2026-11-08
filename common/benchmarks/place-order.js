@@ -42,6 +42,12 @@ const scenarioProfile = PROFILES[PROFILE] ?? null;
 // Requêtes abandonnées par le client au bout de CLIENT_TIMEOUT (PC2), par phase.
 const clientTimeouts = new Counter('client_timeouts');
 
+// R2' : VUs préparés d'avance = débit maximal × délai client. Créer des VUs pendant le run est
+// lent : quand les requêtes s'allongent jusqu'au délai client, k6 perdait des itérations faute
+// de VU prêt (essai sync S3, 411 itérations perdues, toutes dans la phase de panne).
+const timeoutSeconds = Number.parseFloat(CLIENT_TIMEOUT) * (CLIENT_TIMEOUT.endsWith('ms') ? 0.001 : 1);
+const vusFor = (peak) => Math.min(MAX_VUS, Math.max(50, Math.ceil(peak * timeoutSeconds)));
+
 function placeOrderScenario() {
   if (scenarioProfile) {
     const { phases } = scenarioProfile;
@@ -50,7 +56,7 @@ function placeOrderScenario() {
       executor: 'ramping-arrival-rate',
       startRate: phases[0].rate,
       timeUnit: '1s',
-      preAllocatedVUs: Math.max(50, peak),
+      preAllocatedVUs: vusFor(peak),
       maxVUs: MAX_VUS,
       // Chaque phase : 1 s de transition vers son débit, puis maintien.
       stages: phases.flatMap((p) => [
@@ -65,7 +71,7 @@ function placeOrderScenario() {
       rate: RATE,
       timeUnit: '1s',
       duration: DURATION,
-      preAllocatedVUs: Math.max(50, RATE * 2),
+      preAllocatedVUs: vusFor(RATE),
       maxVUs: MAX_VUS,
     };
   }
@@ -74,7 +80,7 @@ function placeOrderScenario() {
       executor: 'ramping-arrival-rate',
       startRate: 50,
       timeUnit: '1s',
-      preAllocatedVUs: Math.max(50, Math.max(...STEPS)),
+      preAllocatedVUs: vusFor(Math.max(...STEPS)),
       maxVUs: MAX_VUS,
       stages: [
         { target: 50, duration: '30s' },

@@ -134,3 +134,46 @@ Sources : `run.json` (validité, panne, k6, commandes perdues), `latency.json` (
 | Hypothèse | Verdict | Justification |
 |---|---|---|
 | **H3b** (async : 0 perdue et ≥ 99 % des commandes de la panne dans un état final moins de 2 min après le retour de Payment) | **Supportée — provisoire** (1 répétition sur 3) | async : 0 perdue, 3 000 / 3 000 en état final, drainage terminé avant la fin du run (90 s après le retour de Payment) ; sync : 2 976 bloquées sur 3 000. Reste à mesurer précisément le délai après le retour et à faire les répétitions 2 et 3. |
+
+---
+
+## S3 — Payment lent : 2 s pendant 60 s (H3c)
+
+*Répétition 1, 2026-11-08. Charge : 100 cmd/s ; latence de Payment portée à 2 s pendant 60 s au milieu du run par `POST /admin/chaos` (profil `s3`), sonde `GET /orders/:id` une fois par seconde. Délai client de 5 s (PC2), VUs préparés d'avance (PC6). Traces échantillonnées à 10 % (PC3).*
+
+| Run | Lenteur (UTC) | Écart à l'heure prévue (pose / levée) | Fichiers |
+|---|---|---|---|
+| sync | voir `run.json` (`faultTiming`) | 10 ms / 8 ms | `results/sync/s3/rep-1/` |
+| async | 09:08:43 → 09:09:43 | voir `run.json` (`faultTiming`) | `results/async/s3/rep-1/` |
+
+Les deux runs sont **valides** (aucune itération perdue par k6, lenteur de 60 s à l'heure prévue).
+
+### Mesures (phase `fault`, sauf mention)
+
+| Mesure | sync | async |
+|---|---|---|
+| Requêtes envoyées par k6 | 5 989 | 6 000 |
+| **Abandons côté client** (sans réponse en 5 s) | **5 247 (87,6 %)** | **0** |
+| **Réponse HTTP p95** (k6) | **5 002 ms** (le délai client) | **3 ms** |
+| Sonde `GET /orders/:id` p95 | 3 ms | 1,6 ms |
+| Commandes allées au bout (état final) | **625** (≈ 10 acceptées par seconde) | **6 000** |
+| Commandes bloquées pour toujours | **5 364** (`RECEIVED`) | **0** |
+| Perdues (absentes de la base) | 0 | 0 |
+| Acceptation p95 | 4,7 s (sur les 625 acceptées) | **39,8 s** (toutes, en attente dans la file) |
+| Acceptation p95 des commandes reçues **après** la lenteur (phase `after`) | **176 ms** | **7,5 s** |
+| Invariants (tout le run) | I10 : 5 364 commandes jamais terminées | I9 : 2 (artefact de `now()`, `docs/hypotheses-assumption.md` §4) |
+
+Sources : `run.json` (validité, `faultTiming`, k6 par phase), `latency.json` (`byPhase.fault`, `byPhase.after`), `invariants.json` de chaque dossier.
+
+### Lecture
+
+1. **La différence n'est pas le débit, c'est qui subit l'attente.** Avec Payment à 2 s et au plus 64 traitements en parallèle, la capacité de Payment est d'environ 32 commandes par seconde dans les deux variantes, pour 100 reçues. En **sync**, c'est le **client** qui attend : 87,6 % des requêtes dépassent 5 s et presque toutes les commandes de la fenêtre restent bloquées (Order abandonne aussi ses appels à Payment au bout de 5 s, attente d'une connexion libre comprise). En **async**, c'est la **file** qui attend : le client a sa réponse en 3 ms, et toutes les commandes aboutissent, environ 40 s plus tard.
+2. **Le sync gaspille la capacité de Payment** : ≈ 10 commandes acceptées par seconde au lieu de ≈ 32 possibles, car beaucoup d'appels attendent une connexion libre puis expirent sans avoir servi. L'async utilise toute la capacité et rattrape tout.
+3. **Même compromis qu'en S4** : après la lenteur, le sync repart aussitôt (176 ms), l'async fait attendre les commandes suivantes derrière sa file (7,5 s au p95, au-delà du critère de 1 s).
+4. **Les lectures ne sont gênées dans aucune variante** (sonde à quelques millisecondes) : Order n'est pas saturé en CPU, l'attente est ailleurs (connexions vers Payment en sync, file en async).
+
+### Verdict
+
+| Hypothèse | Verdict | Justification |
+|---|---|---|
+| **H3c** (async : réponse HTTP p95 < 200 ms et 0 abandon ; sync : plus de 50 % d'abandons) | **Supportée — provisoire** (1 répétition sur 3) | async : 3 ms et 0 abandon ; sync : 87,6 % d'abandons. Compromis hors verdict : acceptation à ≈ 40 s pendant la lenteur et 7,5 s juste après en async. |

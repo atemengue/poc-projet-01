@@ -29,6 +29,7 @@ const SERVICE_PORTS = { order: 3000, payment: 3001, inventory: 3002, shipping: 3
 const DRAIN_MAX_S = 600;   // PC1 : drainage plafonné à 10 min
 const DRAIN_IDLE_S = 30;   // fin du drainage si plus rien ne bouge pendant 30 s (commandes bloquées)
 const DROPPED_LIMIT = 0.01; // CLAUDE.md §8 : ≥ 1 % d'itérations perdues = run invalide
+const FAULT_TOLERANCE_MS = 5000; // R1 : panne posée ou levée à plus de 5 s de l'heure prévue = run invalide
 
 const exec = promisify(execFile);
 const log = (msg) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
@@ -133,19 +134,31 @@ async function firstOrderAt(client, runId, timeoutMs = 60000) {
   throw new Error('aucune commande reçue 60 s après le lancement de k6');
 }
 
+// R1 : l'heure réelle de pose et de levée de la panne est relevée une fois l'action terminée
+// (conteneur arrêté ou redémarré, latence changée) et comparée à l'heure prévue. Lors d'un
+// essai sync S3, la levée était arrivée 6 min trop tard : le scénario joué n'était plus S3.
 async function injectFault(project, fault, phase, t0, events) {
   const at = (ms) => sleep(Math.max(0, t0 + ms - Date.now()));
+  const timing = {};
+
   await at(phase.start * 1000);
   if (fault.kind === 'latency') await setChaos(fault.service, fault.latencyMs);
   else await compose(project, 'stop', fault.service);
-  events.push({ event: 'fault-start', fault, at: new Date().toISOString() });
-  log(`panne : ${fault.kind} ${fault.service}`);
+  timing.plannedStart = new Date(t0 + phase.start * 1000).toISOString();
+  timing.actualStart = new Date().toISOString();
+  timing.startDelayMs = Date.now() - (t0 + phase.start * 1000);
+  events.push({ event: 'fault-start', fault, at: timing.actualStart });
+  log(`panne : ${fault.kind} ${fault.service} (écart ${timing.startDelayMs} ms)`);
 
   await at(phase.end * 1000);
   if (fault.kind === 'latency') await setChaos(fault.service, null);
   else await compose(project, 'start', fault.service);
-  events.push({ event: 'fault-end', fault, at: new Date().toISOString() });
-  log(`fin de panne : ${fault.service}`);
+  timing.plannedEnd = new Date(t0 + phase.end * 1000).toISOString();
+  timing.actualEnd = new Date().toISOString();
+  timing.endDelayMs = Date.now() - (t0 + phase.end * 1000);
+  events.push({ event: 'fault-end', fault, at: timing.actualEnd });
+  log(`fin de panne : ${fault.service} (écart ${timing.endDelayMs} ms)`);
+  return timing;
 }
 
 /** Attend que toutes les commandes du run soient terminées, ou que plus rien ne bouge. */
@@ -255,7 +268,7 @@ try {
 
   if (profile.fault) {
     const phase = timeline(profile).find((p) => p.name === 'fault');
-    await injectFault(project, profile.fault, phase, t0, run.events);
+    run.faultTiming = await injectFault(project, profile.fault, phase, t0, run.events);
   }
   const { code, output } = await k6.done;
   run.k6ExitCode = code;
@@ -308,6 +321,11 @@ try {
   if (run.k6.droppedRatio >= DROPPED_LIMIT) reasons.push(`itérations perdues : ${(run.k6.droppedRatio * 100).toFixed(2)} % ≥ 1 %`);
   if (code !== 0) reasons.push(`k6 a échoué (code ${code})`);
   if (verify === 2) reasons.push('vérification des invariants impossible');
+  if (run.faultTiming) {
+    const { startDelayMs, endDelayMs } = run.faultTiming;
+    if (Math.abs(startDelayMs) > FAULT_TOLERANCE_MS) reasons.push(`panne posée avec ${startDelayMs} ms d'écart (> ${FAULT_TOLERANCE_MS} ms)`);
+    if (Math.abs(endDelayMs) > FAULT_TOLERANCE_MS) reasons.push(`panne levée avec ${endDelayMs} ms d'écart (> ${FAULT_TOLERANCE_MS} ms)`);
+  }
   run.valid = reasons.length === 0;
   run.invalidReasons = reasons;
   // H3b : perdues = requêtes envoyées par k6 dans la phase mesurée, absentes de la base.
