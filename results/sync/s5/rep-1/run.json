@@ -1,0 +1,114 @@
+{
+  "project": "sync",
+  "scenario": "s5",
+  "rep": 1,
+  "witness": false,
+  "noDuplicates": false,
+  "runId": "sync-s5-r1",
+  "profile": {
+    "title": "S5 — Livraison multiple",
+    "load": "10 cmd/s pendant 1 min (après 1 min de préchauffage)",
+    "action": "async : chaque événement livré deux fois (DUPLICATE_DELIVERY=2) ; sync : chaque requête renvoyée avec le même Idempotency-Key ; témoin avec --witness (protection désactivée)",
+    "question": "Quelle complexité supplémentaire l'asynchronisme introduit-il pour conserver les invariants ?",
+    "hypotheses": [
+      "H4 (cohérence) : avec idempotence, 0 effet en double (I7) et 0 violation de I1, pour un surcoût de complétion p95 < 10 % ; le témoin doit montrer des doublons"
+    ],
+    "phases": [
+      {
+        "name": "warmup",
+        "seconds": 60,
+        "rate": 10
+      },
+      {
+        "name": "measure",
+        "seconds": 60,
+        "rate": 10
+      }
+    ],
+    "measure": [
+      "measure"
+    ]
+  },
+  "events": [],
+  "preflight": {
+    "prometheus": true,
+    "jaeger": true,
+    "parity": true
+  },
+  "params": {
+    "TRACE_RATIO": "1.0",
+    "IDEMPOTENCY": "on"
+  },
+  "startedAt": "2026-11-08T15:22:23.302Z",
+  "timeline": [
+    {
+      "name": "warmup",
+      "seconds": 60,
+      "rate": 10,
+      "start": 0,
+      "end": 60,
+      "from": "2026-11-08T15:22:23.302Z",
+      "to": "2026-11-08T15:23:23.302Z"
+    },
+    {
+      "name": "measure",
+      "seconds": 60,
+      "rate": 10,
+      "start": 60,
+      "end": 120,
+      "from": "2026-11-08T15:23:23.302Z",
+      "to": "2026-11-08T15:24:23.302Z"
+    }
+  ],
+  "k6ExitCode": 0,
+  "drain": {
+    "seconds": 0.018,
+    "reason": "toutes les commandes sont terminées",
+    "pending": 0,
+    "incomplete": 0,
+    "done": 1200
+  },
+  "resourcesFile": "resources.json",
+  "invariantsExitCode": 0,
+  "k6": {
+    "iterations": 1200,
+    "dropped": 0,
+    "droppedRatio": 0,
+    "phases": {
+      "warmup": {
+        "requests": 1198,
+        "clientTimeouts": 0,
+        "httpP50": 70.3759725,
+        "httpP95": 157.9688044999999,
+        "httpP99": 331.21096500999977
+      },
+      "measure": {
+        "requests": 1202,
+        "clientTimeouts": 0,
+        "httpP50": 67.53256200000001,
+        "httpP95": 147.88091454999997,
+        "httpP99": 341.3291032499998
+      }
+    },
+    "vusMaxReached": 5,
+    "vusCeiling": 60,
+    "resources": {
+      "samples": 18,
+      "cpuMaxPercent": 10.38,
+      "memMaxPercent": 0.56
+    }
+  },
+  "validity": "valid",
+  "valid": true,
+  "invalidReasons": [],
+  "lost": 0,
+  "duplicates": {
+    "clientRequests": 1200,
+    "requestsWithDuplicateOrders": 0,
+    "extraOrders": 0,
+    "i7Violations": 0,
+    "i1Violations": 0,
+    "duplicatesDetectedTotal": 1178
+  },
+  "finishedAt": "2026-11-08T15:24:26.061Z"
+}

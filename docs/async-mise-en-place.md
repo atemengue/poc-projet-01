@@ -1,7 +1,7 @@
 # Mise en place de la variante asynchrone (étape 4)
 
 > Conception discutée et validée point par point le 2026-11-07, avant tout code (méthodologie : `docs/methodologie.md`).
-> Sources : **Énoncé**, **Responsable** (décision du responsable du POC), **Proposition** (proposée par Claude). « Validée » = acceptée par le responsable le 2026-11-07.
+> Sources : **Énoncé**, **Équipe** (décision de l'équipe du POC), **Proposition** (proposée par Claude). « Validée » = acceptée par l'équipe le 2026-11-07.
 > Implémenté et vérifié le 2026-11-07 (V1 à V16 passées, §7).
 
 ## 1. Point de départ
@@ -19,11 +19,11 @@
 
 | # | Point | Décision | Source |
 |---|---|---|---|
-| AS1 | Rôle du « gestionnaire d'événements » | **RabbitMQ** (le broker). Pas d'orchestrateur central : chorégraphie, comme dans l'énoncé (A-16). | Responsable |
+| AS1 | Rôle du « gestionnaire d'événements » | **RabbitMQ** (le broker). Pas d'orchestrateur central : chorégraphie, comme dans l'énoncé (A-16). | Équipe |
 | AS2 | Chaîne d'événements | Voir §3. Les données utiles voyagent dans les événements : aucun service ne lit les tables d'un autre. | Proposition validée |
 | AS3 | Compensation | Stock insuffisant → Order publie `OrderRejected` → Payment annule (`void`, tous les paiements autorisés de la commande, SV9) → `PaymentVoided` → Order. Notification réagit à `OrderRejected` en parallèle de l'annulation (en `sync/`, elle suit l'annulation : différence propre au style, à documenter). | Énoncé (compensation) + Proposition validée |
 | AS4 | Ordre d'arrivée chez Order (D14) | **Noter le fait, puis décider** : chaque événement enregistre son fait (`ACCEPTED`, `stock_status`), puis Order tente la décision (confirmer, ou rejeter pour stock insuffisant) ; le second arrivé décide. Ajoute `markStockInsufficient` et la condition `stock_status='INSUFFICIENT'` au rejet, **dans les deux `domain.js`** (sync appelle les deux fonctions à la suite : comportement inchangé). | Proposition validée |
-| AS5 | Budget de nouvelles tentatives | **0 des deux côtés.** Une erreur de traitement envoie le message directement en DLQ. Ne sont pas des nouvelles tentatives : l'attente dans la file quand un service est arrêté (propriété du style, mesurée par H3b), la remise en file d'un message non acquitté après un plantage (garantie « au moins une fois »), la republication par le relais de l'outbox. Expérience séparée possible plus tard : même budget non nul dans les deux variantes. | Énoncé (équité) + Responsable |
+| AS5 | Budget de nouvelles tentatives | **0 des deux côtés.** Une erreur de traitement envoie le message directement en DLQ. Ne sont pas des nouvelles tentatives : l'attente dans la file quand un service est arrêté (propriété du style, mesurée par H3b), la remise en file d'un message non acquitté après un plantage (garantie « au moins une fois »), la republication par le relais de l'outbox. Expérience séparée possible plus tard : même budget non nul dans les deux variantes. | Énoncé (équité) + Équipe |
 | AS6 | `prefetch` | **64 par consommateur**, égal à `OUTBOUND_CONNECTIONS` de `sync/` (concurrence maximale reçue par un service), passé par une seule variable commune. Pool `pg` de 20 inchangé. | Proposition validée |
 | AS7 | Relais de l'outbox | **Option C** : chaque service publie lui-même, juste après le commit, les événements qu'il vient d'écrire (avec confirmation du broker, puis `published_at`) ; un balayage de secours toutes les secondes republie les lignes restées non publiées (`FOR UPDATE SKIP LOCKED`). Évite d'ajouter un délai d'interrogation à chacun des 6 événements d'une commande. | Proposition validée |
 | AS8 | RabbitMQ | Image `rabbitmq` 4.x avec administration, figée (tag + empreinte). Échange `topic` `orders` ; une file durable classique par service consommateur ; échange `orders.dlx` et une file `<service>.dlq` par service ; messages persistants ; confirmations de publication ; acquittement manuel après le commit. **2 CPU / 1 Go** (comme PostgreSQL), comptés dans les ressources d'`async/`. Le ralentissement des éditeurs au-delà du seuil mémoire est un comportement à observer (S2, S4), pas un défaut. | Proposition validée |

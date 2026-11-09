@@ -1,0 +1,107 @@
+{
+  "checkedAt": "2026-11-08T15:16:36.229Z",
+  "verdict": "violations",
+  "totalOrders": 1200,
+  "ordersByStatus": {
+    "CONFIRMED": 1176,
+    "REJECTED": 24
+  },
+  "results": [
+    {
+      "id": "I1",
+      "family": "safety",
+      "title": "commande confirmée sans paiement autorisé et stock réservé",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I2",
+      "family": "safety",
+      "title": "commande confirmée sans exactement un paiement autorisé du bon montant",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I3",
+      "family": "safety",
+      "title": "commande confirmée dont les réservations ne correspondent pas aux articles",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I4",
+      "family": "safety",
+      "title": "rejet pour stock insuffisant avec un paiement encore autorisé (compensation non faite)",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I5",
+      "family": "safety",
+      "title": "rejet pour paiement refusé avec une réservation ou une expédition",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I6",
+      "family": "safety",
+      "title": "stock non conservé (stock initial − réservations ≠ stock actuel)",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I7",
+      "family": "safety",
+      "title": "effet de bord dupliqué (paiement, réservation, expédition ou notification en double)",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I8",
+      "family": "safety",
+      "title": "expédition pour une commande non confirmée",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I9",
+      "family": "safety",
+      "title": "horodatages incohérents avec l'état",
+      "violations": 1,
+      "keys": [
+        "94074912-2103-477c-9634-f0dd1a441d09"
+      ],
+      "sample": [
+        {
+          "key": "94074912-2103-477c-9634-f0dd1a441d09",
+          "status": "CONFIRMED",
+          "problem": "confirmed_at < accepted_at"
+        }
+      ]
+    },
+    {
+      "id": "I10",
+      "family": "liveness",
+      "title": "commande non terminée (encore RECEIVED ou ACCEPTED)",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    },
+    {
+      "id": "I11",
+      "family": "liveness",
+      "title": "commande confirmée jamais terminée (expédition ou notification manquante)",
+      "violations": 0,
+      "keys": [],
+      "sample": []
+    }
+  ]
+}

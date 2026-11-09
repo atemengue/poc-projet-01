@@ -1,0 +1,13 @@
+{
+  "project": "sync",
+  "runId": "sync-s1-r1",
+  "phases": [
+    "measure"
+  ],
+  "ordersInRun": 17913,
+  "tracedOrders": 1846,
+  "completeTraces": 1846,
+  "completeRatio": 1,
+  "sampledRatio": 0.10305364818846648,
+  "incomplete": []
+}

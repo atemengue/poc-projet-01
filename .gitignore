@@ -1,5 +1,15 @@
 node_modules/
 .env
-results/
+# Résultats des runs : seuls les fichiers légers des runs officiels sont versionnés (preuves
+# citées dans docs/resultats.md). Exclus : essais à blanc (results/dry-run/, dossiers *-essai*)
+# et données brutes volumineuses (métriques Prometheus, relevés de ressources, résumé k6).
+results/*
+!results/sync/
+!results/async/
+results/*/*/*-essai*/
+results/**/prometheus.json
+results/**/resources.json
+results/**/k6-summary.json
 *.log
 pics/
+.DS_Store

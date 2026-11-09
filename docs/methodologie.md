@@ -27,8 +27,8 @@ Chaque étape du POC suit le même cycle. On ne passe à la phase suivante qu'un
 - Un essai à blanc (calibrage du banc d'essai) n'est jamais cité comme résultat.
 
 ### Traçabilité des sources
-- Chaque élément est étiqueté : **énoncé**, **Responsable** (précision reçue du responsable du projet), **proposition** ou **interprétation**.
-- Une proposition n'est pas une décision : les arbitrages reviennent au responsable.
+- Chaque élément est étiqueté : **énoncé**, **Équipe** (précision reçue de l'équipe du projet), **proposition** ou **interprétation**.
+- Une proposition n'est pas une décision : les arbitrages reviennent à l'équipe.
 - Les décisions de conception vont dans `docs/decisions-conception.md`, les invariants dans `docs/invariants.md`.
 
 ### Le dépôt fait foi
@@ -60,6 +60,6 @@ Chaque étape du POC suit le même cycle. On ne passe à la phase suivante qu'un
 
 ## 4. À compléter
 
-Points de méthode que ce document ne couvre pas encore (rythme des échanges avec le responsable, échéances, critères de fin d'étape, etc.) :
+Points de méthode que ce document ne couvre pas encore (rythme des échanges avec l'équipe, échéances, critères de fin d'étape, etc.) :
 
 - …

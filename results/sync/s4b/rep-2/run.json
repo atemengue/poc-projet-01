@@ -1,0 +1,177 @@
+{
+  "project": "sync",
+  "scenario": "s4b",
+  "rep": 2,
+  "witness": false,
+  "noDuplicates": false,
+  "runId": "sync-s4b-r2",
+  "profile": {
+    "title": "S4b — Shipping indisponible (service secondaire)",
+    "load": "100 cmd/s pendant 3 min",
+    "action": "Shipping arrêté 30 s (docker compose stop), puis redémarré",
+    "question": "Une panne d'un service secondaire empêche-t-elle de terminer les commandes ?",
+    "hypotheses": [
+      "H3a (résilience, service secondaire) : async termine ≥ 99 % des commandes reçues pendant la panne moins de 2 min après le retour de Shipping"
+    ],
+    "phases": [
+      {
+        "name": "warmup",
+        "seconds": 60,
+        "rate": 50
+      },
+      {
+        "name": "before",
+        "seconds": 60,
+        "rate": 100
+      },
+      {
+        "name": "fault",
+        "seconds": 30,
+        "rate": 100
+      },
+      {
+        "name": "after",
+        "seconds": 90,
+        "rate": 100
+      }
+    ],
+    "measure": [
+      "fault"
+    ],
+    "fault": {
+      "kind": "stop",
+      "service": "shipping"
+    }
+  },
+  "events": [
+    {
+      "event": "fault-start",
+      "fault": {
+        "kind": "stop",
+        "service": "shipping"
+      },
+      "at": "2026-11-09T21:34:34.692Z"
+    },
+    {
+      "event": "fault-end",
+      "fault": {
+        "kind": "stop",
+        "service": "shipping"
+      },
+      "at": "2026-11-09T21:35:04.996Z"
+    }
+  ],
+  "preflight": {
+    "prometheus": true,
+    "jaeger": false,
+    "parity": true
+  },
+  "params": {
+    "TRACE_RATIO": "0.1",
+    "IDEMPOTENCY": "on"
+  },
+  "startedAt": "2026-11-09T21:32:34.083Z",
+  "timeline": [
+    {
+      "name": "warmup",
+      "seconds": 60,
+      "rate": 50,
+      "start": 0,
+      "end": 60,
+      "from": "2026-11-09T21:32:34.083Z",
+      "to": "2026-11-09T21:33:34.083Z"
+    },
+    {
+      "name": "before",
+      "seconds": 60,
+      "rate": 100,
+      "start": 60,
+      "end": 120,
+      "from": "2026-11-09T21:33:34.083Z",
+      "to": "2026-11-09T21:34:34.083Z"
+    },
+    {
+      "name": "fault",
+      "seconds": 30,
+      "rate": 100,
+      "start": 120,
+      "end": 150,
+      "from": "2026-11-09T21:34:34.083Z",
+      "to": "2026-11-09T21:35:04.083Z"
+    },
+    {
+      "name": "after",
+      "seconds": 90,
+      "rate": 100,
+      "start": 150,
+      "end": 240,
+      "from": "2026-11-09T21:35:04.083Z",
+      "to": "2026-11-09T21:36:34.083Z"
+    }
+  ],
+  "faultTiming": {
+    "plannedStart": "2026-11-09T21:34:34.083Z",
+    "actualStart": "2026-11-09T21:34:34.692Z",
+    "startDelayMs": 609,
+    "plannedEnd": "2026-11-09T21:35:04.083Z",
+    "actualEnd": "2026-11-09T21:35:04.996Z",
+    "endDelayMs": 913
+  },
+  "k6ExitCode": 0,
+  "drain": {
+    "seconds": 30.476,
+    "reason": "plus de progression depuis 30 s (commandes bloquées)",
+    "pending": 0,
+    "incomplete": 2975,
+    "done": 17999
+  },
+  "resourcesFile": "resources.json",
+  "invariantsExitCode": 1,
+  "k6": {
+    "iterations": 20974,
+    "dropped": 0,
+    "droppedRatio": 0,
+    "phases": {
+      "warmup": {
+        "requests": 2999,
+        "clientTimeouts": 0,
+        "httpP50": 103.119792,
+        "httpP95": 123.17747469999996,
+        "httpP99": 256.15625783999985
+      },
+      "before": {
+        "requests": 5975,
+        "clientTimeouts": 0,
+        "httpP50": 99.821959,
+        "httpP95": 319.5571205,
+        "httpP99": 998.3243705
+      },
+      "fault": {
+        "requests": 3000,
+        "clientTimeouts": 2,
+        "httpP50": 67.4152915,
+        "httpP95": 895.5210735999998,
+        "httpP99": 1868.9598426599994
+      },
+      "after": {
+        "requests": 9000,
+        "clientTimeouts": 0,
+        "httpP50": 97.7054165,
+        "httpP95": 132.83277439999995,
+        "httpP99": 495.00134783
+      }
+    },
+    "vusMaxReached": 196,
+    "vusCeiling": 600,
+    "resources": {
+      "samples": 34,
+      "cpuMaxPercent": 218.7,
+      "memMaxPercent": 3.44
+    }
+  },
+  "validity": "valid",
+  "valid": true,
+  "invalidReasons": [],
+  "lost": 0,
+  "finishedAt": "2026-11-09T21:37:06.898Z"
+}

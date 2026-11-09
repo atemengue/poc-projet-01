@@ -1,0 +1,91 @@
+{
+  "project": "sync",
+  "scenario": "s1",
+  "rep": 1,
+  "witness": false,
+  "runId": "sync-s1-r1",
+  "profile": {
+    "phases": [
+      {
+        "name": "warmup",
+        "seconds": 60,
+        "rate": 50
+      },
+      {
+        "name": "measure",
+        "seconds": 180,
+        "rate": 100
+      }
+    ],
+    "measure": [
+      "measure"
+    ]
+  },
+  "events": [],
+  "preflight": {
+    "prometheus": true,
+    "jaeger": true,
+    "parity": true
+  },
+  "params": {
+    "TRACE_RATIO": "0.1",
+    "IDEMPOTENCY": "on"
+  },
+  "startedAt": "2026-11-08T07:28:36.731Z",
+  "timeline": [
+    {
+      "name": "warmup",
+      "seconds": 60,
+      "rate": 50,
+      "start": 0,
+      "end": 60,
+      "from": "2026-11-08T07:28:36.731Z",
+      "to": "2026-11-08T07:29:36.731Z"
+    },
+    {
+      "name": "measure",
+      "seconds": 180,
+      "rate": 100,
+      "start": 60,
+      "end": 240,
+      "from": "2026-11-08T07:29:36.731Z",
+      "to": "2026-11-08T07:32:36.731Z"
+    }
+  ],
+  "k6ExitCode": 0,
+  "drain": {
+    "seconds": 0.024,
+    "reason": "toutes les commandes sont terminées",
+    "pending": 0,
+    "incomplete": 0,
+    "done": 20912
+  },
+  "resourcesFile": "resources.json",
+  "invariantsExitCode": 0,
+  "tracesExitCode": 0,
+  "k6": {
+    "iterations": 20912,
+    "dropped": 62,
+    "droppedRatio": 0.0029560408124344427,
+    "phases": {
+      "warmup": {
+        "requests": 2999,
+        "clientTimeouts": 0,
+        "httpP50": 101.9045,
+        "httpP95": 137.62916249999998,
+        "httpP99": 230.83637083999997
+      },
+      "measure": {
+        "requests": 17913,
+        "clientTimeouts": 0,
+        "httpP50": 98.240125,
+        "httpP95": 153.65414179999996,
+        "httpP99": 710.7507769199996
+      }
+    }
+  },
+  "valid": true,
+  "invalidReasons": [],
+  "lost": 0,
+  "finishedAt": "2026-11-08T07:32:44.083Z"
+}

@@ -1,0 +1,186 @@
+{
+  "project": "async",
+  "scenario": "s3",
+  "rep": 2,
+  "witness": false,
+  "noDuplicates": false,
+  "runId": "async-s3-r2",
+  "profile": {
+    "title": "S3 — Payment lent",
+    "load": "100 cmd/s pendant 3 min, sonde GET /orders/:id une fois par seconde",
+    "action": "Payment répond en 2 s pendant 60 s (POST /admin/chaos), au milieu du run",
+    "question": "Comment une dépendance lente affecte-t-elle l'ensemble du workflow ?",
+    "hypotheses": [
+      "H3c (résilience, dépendance lente) : async répond au client en p95 < 200 ms avec 0 abandon ; sync dépasse le délai client de 5 s pour plus de 50 % des commandes de la fenêtre"
+    ],
+    "phases": [
+      {
+        "name": "warmup",
+        "seconds": 60,
+        "rate": 50
+      },
+      {
+        "name": "before",
+        "seconds": 60,
+        "rate": 100
+      },
+      {
+        "name": "fault",
+        "seconds": 60,
+        "rate": 100
+      },
+      {
+        "name": "after",
+        "seconds": 60,
+        "rate": 100
+      }
+    ],
+    "measure": [
+      "fault"
+    ],
+    "fault": {
+      "kind": "latency",
+      "service": "payment",
+      "latencyMs": 2000
+    },
+    "probe": true
+  },
+  "events": [
+    {
+      "event": "fault-start",
+      "fault": {
+        "kind": "latency",
+        "service": "payment",
+        "latencyMs": 2000
+      },
+      "at": "2026-11-09T20:58:35.075Z"
+    },
+    {
+      "event": "fault-end",
+      "fault": {
+        "kind": "latency",
+        "service": "payment",
+        "latencyMs": 2000
+      },
+      "at": "2026-11-09T20:59:35.059Z"
+    }
+  ],
+  "preflight": {
+    "prometheus": true,
+    "jaeger": true,
+    "parity": true
+  },
+  "params": {
+    "TRACE_RATIO": "0.1",
+    "IDEMPOTENCY": "on",
+    "DUPLICATE_DELIVERY": "1"
+  },
+  "startedAt": "2026-11-09T20:56:35.045Z",
+  "timeline": [
+    {
+      "name": "warmup",
+      "seconds": 60,
+      "rate": 50,
+      "start": 0,
+      "end": 60,
+      "from": "2026-11-09T20:56:35.045Z",
+      "to": "2026-11-09T20:57:35.045Z"
+    },
+    {
+      "name": "before",
+      "seconds": 60,
+      "rate": 100,
+      "start": 60,
+      "end": 120,
+      "from": "2026-11-09T20:57:35.045Z",
+      "to": "2026-11-09T20:58:35.045Z"
+    },
+    {
+      "name": "fault",
+      "seconds": 60,
+      "rate": 100,
+      "start": 120,
+      "end": 180,
+      "from": "2026-11-09T20:58:35.045Z",
+      "to": "2026-11-09T20:59:35.045Z"
+    },
+    {
+      "name": "after",
+      "seconds": 60,
+      "rate": 100,
+      "start": 180,
+      "end": 240,
+      "from": "2026-11-09T20:59:35.045Z",
+      "to": "2026-11-09T21:00:35.045Z"
+    }
+  ],
+  "faultTiming": {
+    "plannedStart": "2026-11-09T20:58:35.045Z",
+    "actualStart": "2026-11-09T20:58:35.075Z",
+    "startDelayMs": 30,
+    "plannedEnd": "2026-11-09T20:59:35.045Z",
+    "actualEnd": "2026-11-09T20:59:35.059Z",
+    "endDelayMs": 14
+  },
+  "k6ExitCode": 0,
+  "drain": {
+    "seconds": 13.495,
+    "reason": "toutes les commandes sont terminées",
+    "pending": 0,
+    "incomplete": 0,
+    "done": 20975
+  },
+  "resourcesFile": "resources.json",
+  "invariantsExitCode": 1,
+  "k6": {
+    "iterations": 21215,
+    "dropped": 0,
+    "droppedRatio": 0,
+    "phases": {
+      "warmup": {
+        "requests": 2999,
+        "clientTimeouts": 0,
+        "httpP50": 1.614625,
+        "httpP95": 97.90706659999975,
+        "httpP99": 280.89156866,
+        "probeP95": 20.321930649999953
+      },
+      "before": {
+        "requests": 5975,
+        "clientTimeouts": 0,
+        "httpP50": 2.468875,
+        "httpP95": 1542.3504296999981,
+        "httpP99": 3036.43326692,
+        "probeP95": 594.1360402499981
+      },
+      "fault": {
+        "requests": 6000,
+        "clientTimeouts": 0,
+        "httpP50": 1.6151665,
+        "httpP95": 50.46718364999999,
+        "httpP99": 269.91424207999995,
+        "probeP95": 23.028675
+      },
+      "after": {
+        "requests": 6000,
+        "clientTimeouts": 27,
+        "httpP50": 450.27849349999997,
+        "httpP95": 3382.183896849997,
+        "httpP99": 4905.84636275,
+        "probeP95": 1389.461292
+      }
+    },
+    "vusMaxReached": 492,
+    "vusCeiling": 605,
+    "resources": {
+      "samples": 33,
+      "cpuMaxPercent": 93.59,
+      "memMaxPercent": 3.49
+    }
+  },
+  "validity": "valid",
+  "valid": true,
+  "invalidReasons": [],
+  "lost": 0,
+  "finishedAt": "2026-11-09T21:00:51.956Z"
+}

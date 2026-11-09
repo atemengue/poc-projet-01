@@ -1,0 +1,153 @@
+{
+  "project": "sync",
+  "scenario": "s4b",
+  "rep": 1,
+  "witness": false,
+  "runId": "sync-s4b-r1",
+  "profile": {
+    "phases": [
+      {
+        "name": "warmup",
+        "seconds": 60,
+        "rate": 50
+      },
+      {
+        "name": "before",
+        "seconds": 60,
+        "rate": 100
+      },
+      {
+        "name": "fault",
+        "seconds": 30,
+        "rate": 100
+      },
+      {
+        "name": "after",
+        "seconds": 90,
+        "rate": 100
+      }
+    ],
+    "measure": [
+      "fault"
+    ],
+    "fault": {
+      "kind": "stop",
+      "service": "shipping"
+    }
+  },
+  "events": [
+    {
+      "event": "fault-start",
+      "fault": {
+        "kind": "stop",
+        "service": "shipping"
+      },
+      "at": "2026-11-08T08:00:57.623Z"
+    },
+    {
+      "event": "fault-end",
+      "fault": {
+        "kind": "stop",
+        "service": "shipping"
+      },
+      "at": "2026-11-08T08:01:27.994Z"
+    }
+  ],
+  "preflight": {
+    "prometheus": true,
+    "jaeger": true,
+    "parity": true
+  },
+  "params": {
+    "TRACE_RATIO": "0.1",
+    "IDEMPOTENCY": "on"
+  },
+  "startedAt": "2026-11-08T07:58:57.163Z",
+  "timeline": [
+    {
+      "name": "warmup",
+      "seconds": 60,
+      "rate": 50,
+      "start": 0,
+      "end": 60,
+      "from": "2026-11-08T07:58:57.163Z",
+      "to": "2026-11-08T07:59:57.163Z"
+    },
+    {
+      "name": "before",
+      "seconds": 60,
+      "rate": 100,
+      "start": 60,
+      "end": 120,
+      "from": "2026-11-08T07:59:57.163Z",
+      "to": "2026-11-08T08:00:57.163Z"
+    },
+    {
+      "name": "fault",
+      "seconds": 30,
+      "rate": 100,
+      "start": 120,
+      "end": 150,
+      "from": "2026-11-08T08:00:57.163Z",
+      "to": "2026-11-08T08:01:27.163Z"
+    },
+    {
+      "name": "after",
+      "seconds": 90,
+      "rate": 100,
+      "start": 150,
+      "end": 240,
+      "from": "2026-11-08T08:01:27.163Z",
+      "to": "2026-11-08T08:02:57.163Z"
+    }
+  ],
+  "k6ExitCode": 0,
+  "drain": {
+    "seconds": 30.415,
+    "reason": "plus de progression depuis 30 s (commandes bloquées)",
+    "pending": 0,
+    "incomplete": 2967,
+    "done": 18007
+  },
+  "resourcesFile": "resources.json",
+  "invariantsExitCode": 1,
+  "k6": {
+    "iterations": 20974,
+    "dropped": 0,
+    "droppedRatio": 0,
+    "phases": {
+      "warmup": {
+        "requests": 2999,
+        "clientTimeouts": 0,
+        "httpP50": 102.343042,
+        "httpP95": 131.4775628,
+        "httpP99": 182.85997949999998
+      },
+      "before": {
+        "requests": 5975,
+        "clientTimeouts": 0,
+        "httpP50": 98.476834,
+        "httpP95": 129.87134189999998,
+        "httpP99": 224.98071407999993
+      },
+      "fault": {
+        "requests": 3000,
+        "clientTimeouts": 2,
+        "httpP50": 66.2052915,
+        "httpP95": 99.24280354999998,
+        "httpP99": 231.62117615999986
+      },
+      "after": {
+        "requests": 9000,
+        "clientTimeouts": 0,
+        "httpP50": 97.6425415,
+        "httpP95": 122.02244169999997,
+        "httpP99": 186.22463100999994
+      }
+    }
+  },
+  "valid": true,
+  "invalidReasons": [],
+  "lost": 0,
+  "finishedAt": "2026-11-08T08:03:29.791Z"
+}

@@ -1,8 +1,8 @@
 # POC « Communication synchrone et asynchrone » — Problème, incertitude, assumptions et hypothèses
 
-> Source : l'énoncé « Choisir l'architecture du traitement des commandes d'une plateforme de commerce électronique » (`docs/contexte.md`) et les précisions du responsable du projet (2026-10-23 et 2026-10-27).
+> Source : l'énoncé « Choisir l'architecture du traitement des commandes d'une plateforme de commerce électronique » (`docs/contexte.md`) et les précisions de l'équipe du projet (2026-10-23 et 2026-10-27).
 > Rédaction : 2026-11-02 ; restructuré le 2026-11-07 (problème → incertitude → assumptions → hypothèses).
-> Rien n'est mesuré. Les éléments sont étiquetés : **énoncé**, **Responsable** (précision reçue du responsable du projet), **proposition** ou **interprétation** (de ma part, à valider).
+> Rien n'est mesuré. Les éléments sont étiquetés : **énoncé**, **Équipe** (précision reçue de l'équipe du projet), **proposition** ou **interprétation** (de ma part, à valider).
 > Le cours distingue l'**assumption** (ce que nous croyons actuellement) de l'**hypothèse** (cette croyance exposée à la falsification, avec une mesure et un seuil).
 
 ---
@@ -30,7 +30,7 @@ Limite connue : la formulation est asymétrique, elle ne pose pas d'abord la que
 
 **Nous supposons que** l'architecture orientée événements est plus scalable que l'architecture synchrone : sous un pic, la file absorbe la charge et les commandes continuent d'être acceptées dans les délais, alors que la chaîne synchrone sature.
 
-C'est la croyance que la direction refuse d'adopter sans preuve (énoncé). Elle est exposée à la falsification par **H1** (§4). Choix de l'assumption centrale et seuils de H1 : responsable du POC, 2026-11-07.
+C'est la croyance que la direction refuse d'adopter sans preuve (énoncé). Elle est exposée à la falsification par **H1** (§4). Choix de l'assumption centrale et seuils de H1 : équipe du POC, 2026-11-07.
 
 ### 3.2 Posées par l'énoncé
 
@@ -55,7 +55,7 @@ C'est la croyance que la direction refuse d'adopter sans preuve (énoncé). Elle
 | A-25 | Il doit être possible de reconstruire le traitement d'une commande individuelle. | Y compris à travers les messages (propagation du contexte de traçage). |
 | A-26 | Le traitement multiple d'un message est un risque propre à l'asynchrone. | S5 n'est demandé que « pour la variante événementielle ». |
 
-### 3.3 Précisions du responsable
+### 3.3 Précisions de l'équipe
 
 | # | Assumption | Date | Statut |
 |---|---|---|---|
@@ -104,7 +104,7 @@ Latences calculées depuis la base, avec les mêmes requêtes pour toutes les va
 **Défaut de mesure connu, non corrigé (constaté le 2026-11-08, à reprendre)** : les horodatages `accepted_at`, `confirmed_at`, `rejected_at` et `completed_at` sont écrits avec `now()` dans le `domain.js` d'Order. Dans PostgreSQL, `now()` est l'heure du **début de la transaction**, pas celle de la requête. En async, deux événements de la même commande peuvent être traités en même temps par Order (D14) : si la transaction de `InventoryReserved` commence avant celle de `PaymentAuthorized`, puis attend son verrou, elle écrit un `confirmed_at` antérieur à l'`accepted_at` de l'autre. L'ordre réel des opérations est correct (I1 respecté) ; seul l'horodatage est faussé, de la durée d'attente du verrou. Observé dans `results/async/s1/rep-1/invariants.json` : 2 violations de I9 (`confirmed_at < accepted_at`) sur 20 975 commandes ; effet négligeable sur les p95 de S1, mais il peut grandir quand les attentes de verrou s'allongent (S2). En sync, chaque mise à jour se fait seule : le défaut n'apparaît pas. Correction proposée : `clock_timestamp()` (heure réelle de la requête) au lieu de `now()` pour ces quatre colonnes, dans les deux copies du `domain.js` (parité), puis relancer les runs déjà faits. Tant que ce n'est pas corrigé, les violations de I9 de ce type en async sont un artefact de mesure, à distinguer d'une vraie incohérence.
 
 Règles communes :
-- **non concluante** si un run est invalide (`dropped_iterations` ≥ 1 % côté k6), si une mesure manque, ou si les trois répétitions ne donnent pas le même verdict ;
+- **non concluante** si un run est invalide (`dropped_iterations` ≥ 1 % côté k6), si une mesure manque, ou si les deux répétitions ne donnent pas le même verdict (deux répétitions par scénario et par variante : décision de l'équipe du POC, 2026-11-09 ; trois prévues à l'origine) ;
 - les chiffres de l'énoncé (100 et 500 cmd/s, 1 s, 2 s, 30 s) sont repris tels quels ; les autres seuils sont des propositions, sauf mention contraire, et doivent être fixés avant toute mesure.
 
 ### H1 — Scalabilité (hypothèse centrale)
@@ -117,7 +117,7 @@ Règles communes :
 | Mesure | Débit accepté (commandes avec `accepted_at` par seconde, sur le palier), latence d'acceptation p95 des commandes reçues pendant le palier, violations de I1 (`verify`) |
 | Supportée | B respecte les trois seuils et A en manque au moins un. |
 | Rejetée | B manque un seuil sans faire mieux que A, ou A respecte aussi les trois seuils (la scalabilité ne départage pas). |
-| Origine | Énoncé ; seuils validés par le responsable du POC le 2026-11-07 (95 % : proposition acceptée ; 1 s : énoncé). |
+| Origine | Énoncé ; seuils validés par l'équipe du POC le 2026-11-07 (95 % : proposition acceptée ; 1 s : énoncé). |
 
 Point d'attention : en B, `accepted_at` n'est écrit qu'après le traitement du paiement. Si la file s'allonge, la latence d'acceptation de B augmente aussi : l'hypothèse est réellement falsifiable.
 
@@ -131,7 +131,7 @@ Point d'attention : en B, `accepted_at` n'est écrit qu'après le traitement du 
 | Mesure | Latence de complétion p95 de A et de B ; latence d'acceptation p95 de A |
 | Supportée | Écart ≥ 20 % en faveur de A, et A respecte le seuil de 1 s. |
 | Rejetée | Écart < 20 %, ou en faveur de B. |
-| Origine | Énoncé (« latence de complétion ») ; seuil de 20 % et condition d'acceptation p95 < 1 s : **formulation validée telle quelle par le responsable du POC le 2026-11-07**. |
+| Origine | Énoncé (« latence de complétion ») ; seuil de 20 % et condition d'acceptation p95 < 1 s : **formulation validée telle quelle par l'équipe du POC le 2026-11-07**. |
 
 Les latences d'acceptation et de complétion sont rapportées séparément : on ne compare jamais l'acceptation d'une variante à la complétion de l'autre.
 
@@ -149,7 +149,7 @@ L'énoncé parle d'un service **secondaire** indisponible, alors que S3 et S4 ci
 | Mesure | Part des commandes reçues pendant la panne qui sont terminées, et délai après le retour de Shipping |
 | Supportée | B ≥ 99 % en moins de 2 min. |
 | Rejetée | B < 99 %, ou plus de 2 min. |
-| Origine | Énoncé (H3) ; découpage, scénario S4b et seuils (30 s, ≥ 99 %, 2 min) : **validés par le responsable du POC le 2026-11-07**. Raison de la garder malgré un résultat attendu : c'est la seule hypothèse qui teste la H3 de l'énoncé (service secondaire), et une supposition n'est pas une preuve ; l'ADR dira que l'écart vient en partie du budget de nouvelles tentatives à 0 (en sync, il faudrait ajouter un mécanisme pour terminer ces commandes ; en async, la file le fait sans mécanisme ajouté). |
+| Origine | Énoncé (H3) ; découpage, scénario S4b et seuils (30 s, ≥ 99 %, 2 min) : **validés par l'équipe du POC le 2026-11-07**. Raison de la garder malgré un résultat attendu : c'est la seule hypothèse qui teste la H3 de l'énoncé (service secondaire), et une supposition n'est pas une preuve ; l'ADR dira que l'écart vient en partie du budget de nouvelles tentatives à 0 (en sync, il faudrait ajouter un mécanisme pour terminer ces commandes ; en async, la file le fait sans mécanisme ajouté). |
 
 Constat à porter dans l'ADR : avec D5, le synchrone confirme lui aussi pendant une panne de Shipping (la confirmation précède l'expédition). Le critère « accepter » de l'énoncé ne départage donc pas les variantes ici ; ce qui les distingue est la **complétion** (sans nouvelle tentative, A ne termine jamais ces commandes : violation de I11).
 
@@ -163,7 +163,7 @@ Constat à porter dans l'ADR : avec D5, le synchrone confirme lui aussi pendant 
 | Mesure | Commandes perdues (envoyées par k6 mais absentes de la base), part en état final et délai de récupération après le retour de Payment |
 | Supportée | 0 perdue et ≥ 99 % en état final en moins de 2 min. |
 | Rejetée | Au moins une commande perdue, ou < 99 %, ou plus de 2 min. |
-| Origine | Énoncé (S4) ; seuils (30 s, 0 perdue, ≥ 99 % en état final en moins de 2 min) : **validés par le responsable du POC le 2026-11-07**, avec trois précisions : (1) trois états après drainage : **perdue** (envoyée par k6, absente de la base ; comptée en comparant les itérations k6 aux commandes du run), **bloquée** (présente, pas dans un état final), **terminée** (`CONFIRMED` ou `REJECTED`) ; en sync, les commandes de la panne sont attendues « bloquées », pas « perdues » ; (2) le critère p95 d'acceptation < 1 s ne s'applique pas aux commandes reçues pendant la panne (elles ne peuvent être acceptées qu'au retour de Payment, A-11) : leurs latences sont rapportées à part ; (3) seuils larges : ≈ 3 000 commandes en attente après 30 s, Payment en traite ≈ 1 280/s (64 en parallèle × 50 ms). |
+| Origine | Énoncé (S4) ; seuils (30 s, 0 perdue, ≥ 99 % en état final en moins de 2 min) : **validés par l'équipe du POC le 2026-11-07**, avec trois précisions : (1) trois états après drainage : **perdue** (envoyée par k6, absente de la base ; comptée en comparant les itérations k6 aux commandes du run), **bloquée** (présente, pas dans un état final), **terminée** (`CONFIRMED` ou `REJECTED`) ; en sync, les commandes de la panne sont attendues « bloquées », pas « perdues » ; (2) le critère p95 d'acceptation < 1 s ne s'applique pas aux commandes reçues pendant la panne (elles ne peuvent être acceptées qu'au retour de Payment, A-11) : leurs latences sont rapportées à part ; (3) seuils larges : ≈ 3 000 commandes en attente après 30 s, Payment en traite ≈ 1 280/s (64 en parallèle × 50 ms). |
 
 Une commande prise en compte pendant la panne ne peut être, au mieux, qu'« en attente » : jamais acceptée ni confirmée sans paiement autorisé.
 
@@ -178,7 +178,7 @@ Une commande prise en compte pendant la panne ne peut être, au mieux, qu'« en 
 | Supportée | B : p95 < 200 ms et 0 abandon ; A : abandons > 50 %. |
 | Rejetée | B dépasse 200 ms ou a des abandons, ou A a 50 % d'abandons ou moins. |
 | Rapporté, hors verdict (questions de S3 dans l'énoncé) | Débit accepté pendant la fenêtre (attendu ≈ 32 cmd/s dans les deux variantes : 64 traitements en parallèle / 2 s) ; profondeur de la file de Payment (B) et requêtes en vol (A) ; temps de reprise après la fenêtre ; sonde `GET /orders/:id` une fois par seconde (effet sur les autres requêtes) ; latence d'acceptation. |
-| Origine | Énoncé (S3) ; reformulation et seuils (fenêtre de 60 s, 200 ms, > 50 %) : **validés par le responsable du POC le 2026-11-07**. |
+| Origine | Énoncé (S3) ; reformulation et seuils (fenêtre de 60 s, 200 ms, > 50 %) : **validés par l'équipe du POC le 2026-11-07**. |
 
 Pourquoi cette reformulation : la version précédente (B répond en moins de 200 ms) était acquise d'avance, puisque B répond `202` sans attendre Payment. Le vrai effet de S3 est que **les deux variantes sont plafonnées au même débit** (≈ 32 cmd/s) : ce qui diffère est **qui subit l'attente**, le client en synchrone (requêtes qui dépassent 5 s), la file en événementiel (le client a sa réponse, l'acceptation est retardée). Le seuil de 50 % vient du calcul : seules ≈ 32 commandes sur 100 peuvent passer chaque seconde, soit ≈ 68 % d'abandons attendus en A. La latence d'acceptation dépasse forcément 2 s dans les deux variantes.
 
@@ -190,11 +190,11 @@ Pourquoi cette reformulation : la version précédente (B répond en moins de 20
 |---|---|
 | Attribut de qualité | Cohérence, complexité de coordination |
 | Mesure | Violations de I7 et I1 ; latence de complétion p95 avec et sans doublons (idempotence active dans les deux cas) |
-| Supportée | I7 = 0, I1 = 0, surcoût < 10 %, dans chacune des trois répétitions. |
+| Supportée | I7 = 0, I1 = 0, surcoût < 10 %, dans chacune des répétitions. |
 | Rejetée | I7 > 0 ou I1 > 0 avec idempotence, ou surcoût ≥ 10 %. |
 | Validité | Le témoin sans idempotence doit montrer des effets en double ; sinon, le test ne prouve rien. |
 | Rapporté, hors verdict | (1) Coût du **mécanisme lui-même**, même sans doublon : latence de complétion p95 idempotence active contre désactivée, sans doublons ; (2) **inventaire de la complexité ajoutée** pour tenir l'invariant : composants et mécanismes (outbox, `processed_events`, DLQ, balayage de secours, `Idempotency-Key` côté sync), lignes de code concernées dans chaque variante. Répond à la question de S5 : « quelle complexité supplémentaire l'asynchronisme introduit-il pour conserver les invariants ? ». |
-| Origine | Proposition (reformulée le 2026-11-02 : l'ancienne version, « l'événementiel exige de l'idempotence », était vraie par construction). **Validée par le responsable du POC le 2026-11-07** : verdict sur le coût des doublons, seuil de 10 %, coût du mécanisme et inventaire de complexité rapportés à part, **S5 symétrique**. |
+| Origine | Proposition (reformulée le 2026-11-02 : l'ancienne version, « l'événementiel exige de l'idempotence », était vraie par construction). **Validée par l'équipe du POC le 2026-11-07** : verdict sur le coût des doublons, seuil de 10 %, coût du mécanisme et inventaire de complexité rapportés à part, **S5 symétrique**. |
 
 **S5 symétrique (validé le 2026-11-07)** : l'énoncé ne demande S5 que pour l'asynchrone, mais un client qui renvoie sa requête (délai dépassé, réseau) duplique aussi en synchrone. Le même scénario est donc joué sur A : à 10 cmd/s, k6 envoie **chaque requête deux fois avec le même en-tête `Idempotency-Key`** ; avec la protection active, Order renvoie la réponse mémorisée (`idempotency_keys`) sans refaire le traitement ; le témoin sans protection crée deux commandes. Mesure spécifique à A : **commandes en double par requête client** (deux commandes pour un même `Idempotency-Key`), qui n'apparaissent pas dans I7 (ce sont deux commandes distinctes). H4 compare ainsi le coût de la protection contre les doublons **dans les deux styles**, pour la matrice de décision.
 
@@ -210,7 +210,7 @@ Pourquoi cette reformulation : la version précédente (B répond en moins de 20
 | Supportée | B < 99 % et A ≥ 99 %. |
 | Rejetée | B ≥ 99 %. |
 | Rapporté, hors verdict | **Effort d'instrumentation** de chaque variante : propagation du contexte (automatique en A ; code manuel en B pour restaurer le contexte depuis l'outbox, AS9), bruit à supprimer (balayage de secours, M3), défauts trouvés en lisant les traces (Nagle, C6), lignes de code concernées. |
-| Origine | Proposition ; **validée par le responsable du POC le 2026-11-07** (seuil 99 %, définition d'une trace complète par état final, mesure sur l'échantillon, effort rapporté à part). |
+| Origine | Proposition ; **validée par l'équipe du POC le 2026-11-07** (seuil 99 %, définition d'une trace complète par état final, mesure sur l'échantillon, effort rapporté à part). |
 
 Attendu au vu de la conception : avec le `traceparent` gardé dans l'outbox, la trace async est déjà complète (99 spans à travers les cinq services, V13) ; H5 risque d'être **rejetée**. Ce serait un résultat : la difficulté supposée est surmontable, et son coût se lit dans l'effort d'instrumentation, pas dans le pourcentage.
 
@@ -224,7 +224,7 @@ Attendu au vu de la conception : avec le `traceparent` gardé dans l'outbox, la 
 | Supportée | Les deux conditions sont respectées. |
 | Rejetée | L'une des deux échoue. |
 | Hors champ | Le pic à 500 cmd/s : le chemin critique de l'hybride est synchrone, c'est H1 qui en décide. |
-| Origine | Proposition (demandée par le responsable du POC le 2026-11-07) ; preuve à trancher (Q-02). |
+| Origine | Proposition (demandée par l'équipe du POC le 2026-11-07) ; preuve à trancher (Q-02). |
 
 ---
 
@@ -254,13 +254,13 @@ Une métrique **de verdict** décide ; une métrique **de diagnostic** explique 
 
 | ID | Verdict (supportée / rejetée / non concluante) | Preuve (fichier de `results/`) | Notes |
 |---|---|---|---|
-| H1 | **Non concluante pour l'instant — tendance : rejetée** (2026-11-08) | `results/sync/s2/rep-1/` (valide), `results/async/s2/rep-1/` et `rep-2/` (**invalides**, 4,38 % et 1,09 % d'itérations perdues, système saturé) ; détail : `docs/resultats.md`, S2 | À 500 cmd/s : async 43,8 % accepté, acceptation p95 371 s (indicatif) ; sync 70,6 %, 3,7 s. Aucune variante ne tient 500 cmd/s ; le sync va plus loin (décroche vers 300 cmd/s contre 200). Goulot : Order en sync, base partagée et Order en async. Run async à refaire valide, puis répétitions. |
-| H2 | **Rejetée — provisoire** (1 répétition sur 3, 2026-11-08) | `results/sync/s1/rep-1/`, `results/async/s1/rep-1/` ; détail : `docs/resultats.md`, S1 | Complétion p95 : sync 146 ms, async 162 ms, écart 9,9 % < 20 %. Acceptation p95 de A : 68 ms (< 1 s). |
-| H3a | **Supportée — provisoire** (1 répétition sur 3, 2026-11-08) | `results/async/s4b/rep-1/`, `results/sync/s4b/rep-1/` ; détail : `docs/resultats.md`, S4b | async : 3 000/3 000 commandes de la panne terminées ; sync : 2 841 confirmées jamais complétées. Écart dû à la mise en file sans mécanisme ajouté, avec un budget de nouvelles tentatives à 0. |
-| H3b | **Supportée — provisoire** (1 répétition sur 3, 2026-11-08) | `results/sync/s4/rep-1/`, `results/async/s4/rep-1/` ; détail : `docs/resultats.md`, S4 | async : 0 perdue, 3 000/3 000 en état final ; sync : 2 976 bloquées. Compromis hors verdict : en async, les commandes reçues juste après la panne attendent 5,6 s au p95 (58 ms en sync). |
-| H3c | **Supportée — provisoire** (1 répétition sur 3, 2026-11-08) | `results/sync/s3/rep-1/`, `results/async/s3/rep-1/` ; détail : `docs/resultats.md`, S3 | async : réponse HTTP p95 3 ms, 0 abandon ; sync : 87,6 % d'abandons, 5 364 commandes bloquées. Compromis hors verdict : en async, acceptation p95 ≈ 40 s pendant la lenteur et 7,5 s juste après. |
-| H4 | **Supportée — provisoire** (2026-11-08) | `results/async/s5/` (rep-1, rep-1-nodup, rep-1-witness, rep-2, rep-2-nodup), `results/sync/s5/` ; détail : `docs/resultats.md`, S5 | Avec protection : I7 = 0, I1 = 0 ; témoin : I7 = 1 199 (async), 1 199 commandes en double (sync). Surcoût : 0 % à la médiane (112 contre 113 ms) ; p95 dominé par les pics de la machine à 10 cmd/s. Répétition 3 à faire, référence d'abord. |
-| H5 | **Rejetée — provisoire** (1 répétition sur 3, 2026-11-08) | `results/*/s1/rep-1/traces.json` ; détail : `docs/resultats.md`, S1 | Traces complètes : async 100 % (1 780 / 1 780), sync 100 % (1 846 / 1 846). Le coût est dans l'effort d'instrumentation. |
+| H1 | **Non concluante, tendance rejetée — provisoire (rép. 1)** ; rép. 2 non concluante (environnement dégradé, PC10) | `results/sync/s2/rep-1/`, `rep-2/` ; `results/async/s2/rep-1/` à `rep-3/` (inexploitables) ; détail : `docs/resultats.md`, S2 et « Répétition 2 » | Rép. 1 : sync 70,6 % accepté, 3,7 s ; async invalide (43,8 %, 371 s, indicatif). Répétition 3 en environnement propre, et un run async exploitable, nécessaires. |
+| H2 | **Rejetée — provisoire (rép. 1)** ; rép. 2 non concluante (environnement dégradé, PC10) | `results/*/s1/rep-1/` ; rép. 2 : `results/*/s1/rep-2/` ; détail : `docs/resultats.md`, « Répétition 2 » | Rép. 1 : complétion p95 146 contre 162 ms, écart 9,9 % < 20 %. Rép. 2 : async ralenti par la machine (3 123 ms). Répétition 3 en environnement propre. |
+| H3a | **Supportée — définitive** (2 répétitions, 2026-11-09) | `results/*/s4b/rep-1/`, `rep-2/` | async : 100 % des commandes de la panne terminées aux deux répétitions ; sync : ≈ 2 830 confirmées jamais complétées. Écart dû à la mise en file sans mécanisme ajouté, avec un budget de nouvelles tentatives à 0. |
+| H3b | **Supportée — définitive** (2 répétitions, 2026-11-09) | `results/*/s4/rep-1/`, `rep-2/` | async : 0 perdue, 100 % en état final ; sync : ≈ 2 975 bloquées. Compromis hors verdict : en async, les commandes reçues juste après la panne attendent 5,6 à 6 s au p95. |
+| H3c | **Supportée — définitive** (2 répétitions, 2026-11-09) | `results/*/s3/rep-1/`, `rep-2/` | async : 0 abandon, réponse p95 3 et 50 ms ; sync : 87,6 % et 87,2 % d'abandons. Compromis hors verdict : acceptation async ≈ 40 s pendant la lenteur. |
+| H4 | **Supportée — définitive** (2026-11-09 ; réserve : surcoût lu sur la médiane) | `results/*/s5/` | I7 = 0 avec protection ; témoins : I7 = 1 199 et 1 200 (async), 1 199 commandes en double (sync) ; médiane identique avec et sans doublons (112 contre 113 ms) dans les deux variantes. |
+| H5 | **Rejetée — définitive** (2 répétitions, 2026-11-09) | `results/async/s1/rep-1/traces.json`, `rep-2/traces.json` | async : 100 % de traces complètes aux deux répétitions. Le coût est dans l'effort d'instrumentation. |
 | H6 | — | — | — |
 
 ---

@@ -1,8 +1,8 @@
 # Résultats des scénarios
 
 > Résultats mesurés, scénario par scénario, avec le fichier de `results/` qui les prouve (CLAUDE.md §10).
-> `results/` n'est pas versionné : les chiffres sont recopiés ici, le chemin indique où les retrouver sur la machine de mesure.
-> Un verdict n'est définitif qu'avec **trois répétitions concordantes** (`docs/hypotheses-assumption.md`, §4) ; tant que ce n'est pas le cas, il est marqué **provisoire**.
+> Les fichiers légers des runs officiels sont versionnés (`run.json`, `latency.json`, `invariants.json`, `traces.json` dans `results/sync/` et `results/async/`) : chaque chiffre cité ici se vérifie dans le dépôt. Restent sur la machine de mesure : les données brutes volumineuses (`prometheus.json`, `resources.json`, `k6-summary.json`) et les essais à blanc.
+> Un verdict n'est définitif qu'avec **deux répétitions concordantes** (décision de l'équipe du POC, 2026-11-09) (`docs/hypotheses-assumption.md`, §4) ; tant que ce n'est pas le cas, il est marqué **provisoire**.
 > Les essais à blanc (`results/dry-run/`, dossiers `*-essai*`) ne sont jamais cités ici.
 
 ---
@@ -48,9 +48,9 @@ Sources : `run.json`, `latency.json` (`measure`), `invariants.json`, `traces.jso
 
 | Hypothèse | Verdict | Justification |
 |---|---|---|
-| Exigence S1 (p95 d'acceptation < 1 s, pas d'accumulation) | **Respectée par A et B — provisoire** (1 répétition sur 3) | 68 et 77 ms ; drainage nul |
-| **H2** (sync : complétion p95 au moins 20 % plus faible, et acceptation p95 < 1 s) | **Rejetée — provisoire** (1 répétition sur 3) | Écart de 9,9 % (146 contre 162 ms), sous le seuil de 20 % ; la condition d'acceptation de A est remplie |
-| **H5** (async < 99 % de traces complètes, sync ≥ 99 %) | **Rejetée — provisoire** (1 répétition sur 3) | async : 100 % (1 780 / 1 780) |
+| Exigence S1 (p95 d'acceptation < 1 s, pas d'accumulation) | **Respectée par A et B — provisoire** (1 répétition sur 2) | 68 et 77 ms ; drainage nul |
+| **H2** (sync : complétion p95 au moins 20 % plus faible, et acceptation p95 < 1 s) | **Rejetée — provisoire** (1 répétition sur 2) | Écart de 9,9 % (146 contre 162 ms), sous le seuil de 20 % ; la condition d'acceptation de A est remplie |
+| **H5** (async < 99 % de traces complètes, sync ≥ 99 %) | **Rejetée — provisoire** (1 répétition sur 2) | async : 100 % (1 780 / 1 780) |
 
 ---
 
@@ -91,7 +91,7 @@ Sources : `run.json` (validité, panne, k6), `latency.json` (`byPhase.fault`), `
 
 | Hypothèse | Verdict | Justification |
 |---|---|---|
-| **H3a** (async : ≥ 99 % des commandes de la panne terminées en moins de 2 min après le retour de Shipping) | **Supportée — provisoire** (1 répétition sur 3) | async : 100 % terminées, drainage terminé avant la fin du run (90 s après le retour de Shipping) ; sync : ≈ 3 % complétées. Reste à mesurer précisément le délai après le retour (`max(completed_at)` − fin de panne) et à faire les répétitions 2 et 3. |
+| **H3a** (async : ≥ 99 % des commandes de la panne terminées en moins de 2 min après le retour de Shipping) | **Supportée — provisoire** (1 répétition sur 2) | async : 100 % terminées, drainage terminé avant la fin du run (90 s après le retour de Shipping) ; sync : ≈ 3 % complétées. Reste à mesurer précisément le délai après le retour (`max(completed_at)` − fin de panne) et à faire les répétitions 2 et 3. |
 
 ---
 
@@ -133,7 +133,7 @@ Sources : `run.json` (validité, panne, k6, commandes perdues), `latency.json` (
 
 | Hypothèse | Verdict | Justification |
 |---|---|---|
-| **H3b** (async : 0 perdue et ≥ 99 % des commandes de la panne dans un état final moins de 2 min après le retour de Payment) | **Supportée — provisoire** (1 répétition sur 3) | async : 0 perdue, 3 000 / 3 000 en état final, drainage terminé avant la fin du run (90 s après le retour de Payment) ; sync : 2 976 bloquées sur 3 000. Reste à mesurer précisément le délai après le retour et à faire les répétitions 2 et 3. |
+| **H3b** (async : 0 perdue et ≥ 99 % des commandes de la panne dans un état final moins de 2 min après le retour de Payment) | **Supportée — provisoire** (1 répétition sur 2) | async : 0 perdue, 3 000 / 3 000 en état final, drainage terminé avant la fin du run (90 s après le retour de Payment) ; sync : 2 976 bloquées sur 3 000. Reste à mesurer précisément le délai après le retour et à faire les répétitions 2 et 3. |
 
 ---
 
@@ -176,7 +176,7 @@ Sources : `run.json` (validité, `faultTiming`, k6 par phase), `latency.json` (`
 
 | Hypothèse | Verdict | Justification |
 |---|---|---|
-| **H3c** (async : réponse HTTP p95 < 200 ms et 0 abandon ; sync : plus de 50 % d'abandons) | **Supportée — provisoire** (1 répétition sur 3) | async : 3 ms et 0 abandon ; sync : 87,6 % d'abandons. Compromis hors verdict : acceptation à ≈ 40 s pendant la lenteur et 7,5 s juste après en async. |
+| **H3c** (async : réponse HTTP p95 < 200 ms et 0 abandon ; sync : plus de 50 % d'abandons) | **Supportée — provisoire** (1 répétition sur 2) | async : 3 ms et 0 abandon ; sync : 87,6 % d'abandons. Compromis hors verdict : acceptation à ≈ 40 s pendant la lenteur et 7,5 s juste après en async. |
 
 ---
 
@@ -355,3 +355,46 @@ Sources : `run.json` (`validity`, `duplicates`), `latency.json` (`measure`), `in
 | Hypothèse | Verdict | Justification |
 |---|---|---|
 | **H4** (avec idempotence : I7 = 0, I1 = 0, surcoût de complétion p95 < 10 % ; le témoin doit montrer des doublons) | **Supportée — provisoire** (2 répétitions de la protection et de la référence, 1 du témoin) | I7 = 0 et I1 = 0 avec protection ; témoin I7 = 1 199 ; surcoût p95 négatif dans les deux répétitions (−86,8 %, −62 %), donc sous 10 %. **Réserve** : à 10 cmd/s, le surcoût se lit sur la médiane (0 %), le p95 étant dominé par les pics de la machine. Répétition 3 à faire en inversant l'ordre (référence d'abord). |
+
+---
+
+## Répétition 2 (2026-11-09) et verdicts consolidés
+
+*Ordre inversé par rapport à la répétition 1 (PC9) : async d'abord, puis sync. Tous les runs sont valides.*
+
+### Mesures de la répétition 2, face à la répétition 1
+
+| Scénario | Mesure | sync rép. 1 | sync rép. 2 | async rép. 1 | async rép. 2 |
+|---|---|---|---|---|---|
+| S1 | Acceptation p95 | 68 ms | 71 ms | 77 ms | **1 660 ms** |
+| S1 | Complétion p95 | 146 ms | 150 ms | 162 ms | **3 123 ms** |
+| S1 | Traces complètes | 1 846 / 1 846 | mesure échouée (`tracesExitCode` 2) | 1 780 / 1 780 | 1 738 / 1 738 |
+| S2 | Débit accepté à 500 cmd/s ; acceptation p95 | 70,6 % ; 3,7 s | 54,6 % ; 4,0 s | invalide | pas de run exploitable |
+| S3 | Abandons côté client ; réponse HTTP p95 | 87,6 % ; 5 002 ms | 87,2 % ; 5 002 ms | 0 ; 3 ms | 0 ; 50 ms |
+| S4 | Commandes de la panne terminées ; perdues | 24 / 3 000 ; 0 | 27 / 3 000 ; 0 | 3 000 / 3 000 ; 0 | 2 998 / 2 998 ; 0 |
+| S4b | Confirmées sans être complétées ; commandes terminées (async) | 2 841 | 2 825 | 3 000 / 3 000 | 3 000 / 3 000 |
+| S5 | Avec protection : effets en double / commandes en double | 0 | 0 | I7 = 0 | — (fait à la rép. 2 de S5) |
+| S5 | Témoin | 1 199 commandes en double | 1 199 commandes en double | I7 = 1 199 | I7 = 1 200 |
+| S5 | Complétion p50 avec protection / référence | — | 112 / 113 ms | 112 / 113 ms (rép. 2) | — |
+
+Fichiers : `results/<projet>/<scénario>/rep-2/` (et `rep-2-nodup/`, `rep-2-witness/` pour S5).
+
+### Environnement dégradé pendant les runs S1 et S2 de la répétition 2
+
+Le run async S1 de la répétition 2 est nettement plus lent que celui de la répétition 1 (acceptation p95 1 660 ms contre 77 ms), avec des pics ponctuels (3,5 s vers 180 s) entre des périodes normales. Indices d'une **machine ralentie**, pas d'un changement du système : tous les conteneurs consomment plus de CPU pour le même travail (PostgreSQL 222 % contre 155 %, Notification 116 % contre 36 %), la base est saine (pas de lignes mortes, 17 Mo), k6 n'est pas en cause (1 cœur, 3 % de mémoire). Mêmes signes en S4b et S3 async (acceptation et phase « après » plus lentes), et en S2 sync (54,6 % accepté contre 70,6 %). Causes possibles : Mac sur batterie ou en économie d'énergie, chauffe du processeur, autres applications.
+
+**Décision de l'équipe du POC (2026-11-09)** : ces runs restent **valides** selon nos critères et ne sont pas écartés après coup ; mais pour **H1 et H2**, la répétition 2 est déclarée **non concluante** (environnement dégradé), et le verdict garde les résultats de la **répétition 1**, provisoires. Une **répétition 3 dans un environnement propre** est nécessaire (PC10, `docs/decisions-conception.md`).
+
+### Verdicts consolidés (deux répétitions)
+
+| Hypothèse | Verdict | Justification |
+|---|---|---|
+| **H3a** (Shipping arrêté) | **Supportée — définitive** | async : 100 % des commandes de la panne terminées aux deux répétitions ; sync : ≈ 2 830 confirmées jamais complétées |
+| **H3b** (Payment arrêté) | **Supportée — définitive** | async : 0 perdue et 100 % en état final aux deux répétitions ; sync : ≈ 2 975 bloquées |
+| **H3c** (Payment lent) | **Supportée — définitive** | async : 0 abandon, réponse p95 3 et 50 ms ; sync : 87,6 % et 87,2 % d'abandons |
+| **H4** (doublons) | **Supportée — définitive** (réserve : surcoût lu sur la médiane) | I7 = 0 avec protection ; témoins à 1 199 et 1 200 ; médianes identiques avec et sans doublons dans les deux variantes |
+| **H5** (traces) | **Rejetée — définitive** | async : 100 % de traces complètes aux deux répétitions (la mesure sync de la rép. 2 a échoué, sans effet sur ce verdict, qui ne dépend que de B) |
+| **Exigence S1 — sync** | **Respectée — définitive** | 68 et 71 ms |
+| **Exigence S1 — async** | **Respectée — provisoire (rép. 1)** ; rép. 2 non concluante (environnement dégradé) | 77 ms à la rép. 1 ; 1 660 ms à la rép. 2. Répétition 3 en environnement propre |
+| **H2** (latence) | **Rejetée — provisoire (rép. 1)** ; rép. 2 non concluante (environnement dégradé) | Rép. 1 : écart de 9,9 % (146 contre 162 ms), sous le seuil de 20 %. Rép. 2 : écart de 95 % dû au ralentissement de la machine pendant le run async. Répétition 3 en environnement propre |
+| **H1** (pic) | **Non concluante, tendance rejetée — provisoire (rép. 1)** ; rép. 2 non concluante | Rép. 1 : sync valide (70,6 %, 3,7 s), async invalide (43,8 %, 371 s, indicatif) ; rép. 2 : sync 54,6 % en environnement dégradé, aucun run async exploitable. Répétition 3 en environnement propre, et un moyen d'obtenir un run async exploitable |

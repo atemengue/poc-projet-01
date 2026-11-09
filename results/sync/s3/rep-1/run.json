@@ -1,0 +1,169 @@
+{
+  "project": "sync",
+  "scenario": "s3",
+  "rep": 1,
+  "witness": false,
+  "runId": "sync-s3-r1",
+  "profile": {
+    "phases": [
+      {
+        "name": "warmup",
+        "seconds": 60,
+        "rate": 50
+      },
+      {
+        "name": "before",
+        "seconds": 60,
+        "rate": 100
+      },
+      {
+        "name": "fault",
+        "seconds": 60,
+        "rate": 100
+      },
+      {
+        "name": "after",
+        "seconds": 60,
+        "rate": 100
+      }
+    ],
+    "measure": [
+      "fault"
+    ],
+    "fault": {
+      "kind": "latency",
+      "service": "payment",
+      "latencyMs": 2000
+    },
+    "probe": true
+  },
+  "events": [
+    {
+      "event": "fault-start",
+      "fault": {
+        "kind": "latency",
+        "service": "payment",
+        "latencyMs": 2000
+      },
+      "at": "2026-11-08T09:01:38.091Z"
+    },
+    {
+      "event": "fault-end",
+      "fault": {
+        "kind": "latency",
+        "service": "payment",
+        "latencyMs": 2000
+      },
+      "at": "2026-11-08T09:02:38.089Z"
+    }
+  ],
+  "preflight": {
+    "prometheus": true,
+    "jaeger": true,
+    "parity": true
+  },
+  "params": {
+    "TRACE_RATIO": "0.1",
+    "IDEMPOTENCY": "on"
+  },
+  "startedAt": "2026-11-08T08:59:38.081Z",
+  "timeline": [
+    {
+      "name": "warmup",
+      "seconds": 60,
+      "rate": 50,
+      "start": 0,
+      "end": 60,
+      "from": "2026-11-08T08:59:38.081Z",
+      "to": "2026-11-08T09:00:38.081Z"
+    },
+    {
+      "name": "before",
+      "seconds": 60,
+      "rate": 100,
+      "start": 60,
+      "end": 120,
+      "from": "2026-11-08T09:00:38.081Z",
+      "to": "2026-11-08T09:01:38.081Z"
+    },
+    {
+      "name": "fault",
+      "seconds": 60,
+      "rate": 100,
+      "start": 120,
+      "end": 180,
+      "from": "2026-11-08T09:01:38.081Z",
+      "to": "2026-11-08T09:02:38.081Z"
+    },
+    {
+      "name": "after",
+      "seconds": 60,
+      "rate": 100,
+      "start": 180,
+      "end": 240,
+      "from": "2026-11-08T09:02:38.081Z",
+      "to": "2026-11-08T09:03:38.081Z"
+    }
+  ],
+  "faultTiming": {
+    "plannedStart": "2026-11-08T09:01:38.081Z",
+    "actualStart": "2026-11-08T09:01:38.091Z",
+    "startDelayMs": 10,
+    "plannedEnd": "2026-11-08T09:02:38.081Z",
+    "actualEnd": "2026-11-08T09:02:38.089Z",
+    "endDelayMs": 8
+  },
+  "k6ExitCode": 0,
+  "drain": {
+    "seconds": 30.382,
+    "reason": "plus de progression depuis 30 s (commandes bloquées)",
+    "pending": 5364,
+    "incomplete": 0,
+    "done": 15603
+  },
+  "resourcesFile": "resources.json",
+  "invariantsExitCode": 1,
+  "k6": {
+    "iterations": 21206,
+    "dropped": 8,
+    "droppedRatio": 0.0003771094560196097,
+    "phases": {
+      "warmup": {
+        "requests": 2999,
+        "clientTimeouts": 0,
+        "httpP50": 101.800333,
+        "httpP95": 156.19303719999988,
+        "httpP99": 270.90604116,
+        "probeP95": 7.4692003499999995
+      },
+      "before": {
+        "requests": 5975,
+        "clientTimeouts": 1,
+        "httpP50": 97.860834,
+        "httpP95": 144.0999126999998,
+        "httpP99": 329.74759191999925,
+        "probeP95": 3.221016999999997
+      },
+      "fault": {
+        "requests": 5989,
+        "clientTimeouts": 5247,
+        "httpP50": 5000.478711,
+        "httpP95": 5001.7608772,
+        "httpP99": 5004.64228596,
+        "probeP95": 3.1784756499999958
+      },
+      "after": {
+        "requests": 6003,
+        "clientTimeouts": 0,
+        "httpP50": 98.529667,
+        "httpP95": 438.1957419999994,
+        "httpP99": 1064.1426743199997,
+        "probeP95": 44.193092299999755
+      }
+    }
+  },
+  "valid": true,
+  "invalidReasons": [],
+  "lost": 0,
+  "finishedAt": "2026-11-08T09:04:14.282Z"
+}

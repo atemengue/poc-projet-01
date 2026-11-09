@@ -1,6 +1,6 @@
 # Invariants
 
-Source de chaque règle : **Énoncé**, **Responsable** ou **Proposition** (proposée par Claude, à valider).
+Source de chaque règle : **Énoncé**, **Équipe** ou **Proposition** (proposée par Claude, à valider).
 Toutes se vérifient en SQL **après drainage** (plus aucun message ni requête en vol), par `common/scripts/verify-invariants.js` (`cd common && npm run verify`). Chaque règle est une requête de `common/scripts/invariants.js` qui renvoie les éléments en infraction ; `common/test/invariants.test.js` prouve que chacune détecte une violation injectée.
 
 Code de sortie : `0` toutes respectées ; `1` au moins une violation (résultat à documenter, le run reste valide) ; `2` inconclusive (base injoignable, ou aucune commande : rien à vérifier).

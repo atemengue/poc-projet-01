@@ -18,7 +18,7 @@ Livrable terminal : mise à jour de `docs/ADR-001.md` (Status, Context, Architec
 
 ## 2. État d'avancement
 
-**Annoncé (par le responsable)** : étapes 1 à 6 (socle, `sync/`, vérification d'invariant, `async/`, parité, traces) terminées ; étape en cours : **étape 7**, scénarios S1 à S5 (procédure : `poc-communication-etape7.md`).
+**Annoncé (par l'équipe)** : étapes 1 à 6 (socle, `sync/`, vérification d'invariant, `async/`, parité, traces) terminées ; étape en cours : **étape 7**, scénarios S1 à S5 (procédure : `poc-communication-etape7.md`).
 
 **Constaté dans le dépôt au 2026-11-07** (le code fait foi) : étapes 1 à 6 faites et vérifiées (socle, `sync/`, vérification d'invariants, `async/`, parité, traces) ; étape 7 à faire. Ne présume pas que le reste est fait ; revérifie avant chaque étape et mets cette liste à jour.
 
@@ -33,19 +33,23 @@ Présent :
 - `async/` (étape 4, vérifiée le 2026-11-07, V1–V16 de `docs/async-mise-en-place.md`) : RabbitMQ 4.3.6 figé (topologie déclarée par `async/rabbitmq/definitions.json`, 2 CPU / 1 Go), `lib/` (`broker.js` confirmations + `prefetch` 64 + `noDelay`, `outbox.js` publication après commit + balayage de secours non tracé, `consumer.js` idempotence `processed_events` + budget 0 vers DLQ, `service.js`), 5 services (copies identiques des `domain.js`, `services/order/handlers.js` « noter le fait, puis décider »), `POST /orders` → `202`, `npm test` (5 tests). Vérifié : parcours, compensation, panne de Payment (commandes terminées au redémarrage), doublon ignoré, outbox vide et DLQ vides après drainage, trace unique à travers les 5 services, `verify` OK, essai à blanc `dry-async-01` (100 cmd/s, p95 d'acceptation 125 ms), `reset` qui purge les files. `async/` a sa propre base (volume distinct de `sync/`).
 - Parité (étape 5, vérifiée le 2026-11-07) : `common/scripts/check-parity.js` (`cd common && npm run parity [-- --out <fichier>]`, codes 0/1/2) compare l'empreinte SHA-256 des cinq `domain.js` et la configuration Compose (cpus, mem_limit, `PG_POOL_MAX`, `LOG_LEVEL`, `SIMULATED_LATENCY_MS`, `PREFETCH` async = `OUTBOUND_CONNECTIONS` sync) ; 7 tests dans `common/test/parity.test.js`. État au 2026-11-07 : parité respectée (5 fichiers identiques, 30/30 contrôles de configuration).
 - Traces (étape 6, vérifiée le 2026-11-07 dans les deux variantes) : spans HTTP serveur nommés par la route (`POST /orders`, `GET /orders/:id`, attribut `http.route`) ; attribut `order.id` sur la requête HTTP de chaque service (sync) et sur chaque traitement d'événement (async, avec `event.type`), pour retrouver la trace d'une commande (Jaeger : Tags `order.id=<uuid>`) ; `/health` et `/metrics` ne sont plus tracés (C-1) ; log `order received` (orderId + traceId) en async. Les spans HTTP client de `sync/` restent nommés `POST` (convention OpenTelemetry). `@opentelemetry/api` ajoutée à `sync/`.
-- `docs/resultats.md` : résultats mesurés par scénario, avec les fichiers de `results/` et les verdicts (provisoires tant qu'il n'y a pas trois répétitions). Au 2026-11-08 : S5 (H4 supportée, provisoire ; surcoût nul à la médiane), S2 (sync valide ; async : trois runs inutilisables, dont la répétition 3 où k6 a saturé la machine (CPU 1 307 %) ; critère de santé de k6 à corriger (PC7, CPU et préchauffage) ; aucun run async exploitable pour l'instant ; H1 non concluante, tendance rejetée : aucune variante ne tient 500 cmd/s, le sync va plus loin, goulot Order en sync, base partagée et Order en async), S3 (H3c supportée, provisoire), S1 (exigence S1 respectée par A et B ; H2 et H5 rejetées, provisoire) S4 (H3b supportée, provisoire ; compromis : async ralentit les commandes qui suivent la panne) et S4b (H3a supportée, provisoire).
+- CLI `./poc` (2026-11-09, partie 1 vérifiée sur async) : lanceur à la racine, code dans `common/cli/` (`poc.js`, `stack.js`), Node sans dépendance. Commandes : `build`, `up`, `down`, `status`, `check`, `logs`, `config`, `chaos`, `fault`, `reset`, `order`, `test`, `verify`, `latency`, `traces`, `parity`, `scenario`, `load` ; `./poc help`. Une seule CLI à la racine (pas une par projet, contrairement au §3). À faire : `campaign` (série de runs, alternance de l'ordre) et `report` (verdicts H1 à H5, `results/REPORT.md`). Modèle : le README de la CLI d'un autre POC (OrderFlow, cache distribué), fourni par l'équipe du POC le 2026-11-09 ; commandes adaptées à notre workflow.
+- `docs/architecture-analysis.md` (2026-11-09) : Architecture Analysis, livrable 4 (résultats en questions-réponses, interprétation, matrice de décision citant les preuves, compromis, limites, ce qui manque, orientation conditionnelle vers l'hybride). Version volontairement simple.
+- `docs/poc-plan.md` (2026-11-09) : PoC Plan, livrable 1 de l'énoncé (problème, décision candidate, exigences, hypothèses et mesures de succès, métriques, scénarios, protocole, équité, limites) ; renvoie aux documents sources.
+- `docs/resultats.md` : résultats mesurés par scénario, avec les fichiers de `results/` et les verdicts (provisoires tant qu'il n'y a pas deux répétitions concordantes). Au 2026-11-09, après deux répétitions : H3a, H3b, H3c, H4 supportées (définitives), H5 rejetée (définitive), exigence S1 respectée en sync (définitive) ; H2 rejetée et exigence S1 async respectée (provisoires, rép. 1), H1 non concluante tendance rejetée (provisoire) : la répétition 2 de S1 et S2 a été faite sur une machine ralentie et déclarée non concluante pour H1 et H2 (PC10) ; **répétition 3 en environnement propre à faire**, et un run async S2 exploitable.
 - `docs/async-mise-en-place.md` : conception validée (AS1–AS11), plan, étapes de validation V1–V16 et constats de mise en œuvre.
-- `docs/ADR-001.md` : version initiale (2026-11-07), décision candidate ADOPT EVENT-DRIVEN, figée ; sections finales vides.
+- `docs/ADR-001.md` (2026-11-09) : **ADR final, Accepted : ADOPT SYNCHRONOUS** (décision de l'équipe du POC), avec la candidate (ADOPT EVENT-DRIVEN, infirmée) recopiée sans modification ; conséquence principale : système de nouvelles tentatives côté synchrone, à mesurer. Version initiale conservée dans `docs/ADR-001-initial.md`.
 - `docs/decisions-conception.md` : décisions DB1–DB12 (base), SV1–SV13 (services synchrones), VI1–VI7 (vérification des invariants), avec leur source.
 
 Absent (dossiers vides ou fichiers manquants) :
-- la CLI `poc` ;
 - `common/scripts/run-scenario.js` ; la forme définitive de S2 (D8, D13 ; k6 a déjà les profils `constant` et `steps`) ;
-- PoC Plan, Architecture Analysis, matrice de décision (les hypothèses et la traçabilité sont dans `docs/hypotheses-assumption.md`) ;
+- matrice de décision définitive (première version dans `docs/architecture-analysis.md`) (les hypothèses et la traçabilité sont dans `docs/hypotheses-assumption.md`) ;
 - `poc-communication-etape7.md` ;
 - les crochets de l'étape 7 : `POST /admin/chaos`, `Idempotency-Key`, métriques métier ; le script de mesure de la part de traces complètes (H5).
 
 **Défaut de mesure corrigé (2026-11-03)** : `received_at` était écrit à l'INSERT (`now()`), après l'attente du pool et la lecture des prix. Il vaut désormais l'instant d'arrivée de la requête (hook `onRequest` de `POST /orders`), passé à `createOrder`, qui l'exige. `async/` doit faire de même côté transport. Détail : `docs/cas-de-comprehension.md`, C3.
+
+**Défaut de stabilité connu, non corrigé (2026-11-09)** : le pool `pg` de `lib/db.js` (sync et async) n'écoute pas l'événement `error`. Quand une connexion inactive est coupée (coupure réseau de Docker Desktop, mise en veille), Node arrête le processus : les cinq services async se sont arrêtés ainsi le 2026-11-08 à 22:56 (`Connection terminated unexpectedly`). Correction proposée : `pool.on('error', …)` qui journalise, même changement dans les deux variantes (stabilité du processus, pas un mécanisme de résilience).
 
 **Défaut de mesure connu, non corrigé (2026-11-08)** : `now()` (début de transaction) au lieu de `clock_timestamp()` pour `accepted_at`/`confirmed_at`/`rejected_at`/`completed_at` dans le `domain.js` d'Order ; en async, deux événements concurrents peuvent donner `confirmed_at < accepted_at` (I9). Détail et correction proposée : `docs/hypotheses-assumption.md` §4 (définition des latences).
 
@@ -64,7 +68,7 @@ poc-projet-01/
 ├─ async/     # projet B autonome : idem + outbox, adaptateur broker, consommateurs
 ├─ common/    # HORS comparaison : db/ (schema, seed), benchmarks/ (k6), scripts/, infra/ (observabilité)
 ├─ docs/      # ADR-001, hypothèses, traçabilité, matrice de décision
-└─ results/   # sorties des runs (non versionné)
+└─ results/   # sorties des runs ; seuls les fichiers légers des runs officiels sont versionnés (voir .gitignore)
 ```
 
 Règles de structure :
@@ -86,7 +90,7 @@ Scénario unique : **Place Order**. Requête minimale : `customerId`, `items[]`,
 
 États : `RECEIVED → ACCEPTED (paiement autorisé) → CONFIRMED (stock réservé)`, ou `REJECTED` (paiement refusé / stock insuffisant, avec compensation).
 
-- **Acceptée** = paiement passé (précision du responsable). **Confirmée** = transaction sur Order.
+- **Acceptée** = paiement passé (précision de l'équipe). **Confirmée** = transaction sur Order.
 - **Invariant non négociable** : une commande ne peut être confirmée que si le paiement est autorisé **et** le stock réservé. Il est appliqué en **un seul point**, par la même requête dans A et B :
 
 ```sql
@@ -104,7 +108,7 @@ UPDATE orders SET status='CONFIRMED', confirmed_at=now()
 La comparaison n'est valable que si seul le **style** diffère. Donc :
 
 - Même schéma SQL, mêmes colonnes d'horodatage (`received_at`, `accepted_at`, `confirmed_at`, `completed_at`), mêmes latences simulées, mêmes limites de ressources (1 CPU / 512 Mo par service), même charge k6, même budget de retries.
-- Les latences se calculent **depuis la base**, avec les mêmes requêtes pour A et B. Latence d'acceptation = `accepted_at − received_at` (critère p95 < 1 s, précision du responsable du 2026-10-27) ; confirmation ; complétion. Ne compare jamais le p95 d'acceptation d'une variante au p95 de complétion de l'autre.
+- Les latences se calculent **depuis la base**, avec les mêmes requêtes pour A et B. Latence d'acceptation = `accepted_at − received_at` (critère p95 < 1 s, précision de l'équipe du 2026-10-27) ; confirmation ; complétion. Ne compare jamais le p95 d'acceptation d'une variante au p95 de complétion de l'autre.
 - Pas de circuit breaker ni de mécanisme de résilience ajouté à une variante seulement : cela fausserait la comparaison. Toute amélioration de résilience est une expérience distincte, à documenter.
 - Sous Node, il n'y a pas de thread par requête : l'indicateur « threads/connexions » se lit comme requêtes en vol, sockets occupés, attente dans le pool sortant et retard de la boucle d'événements.
 
@@ -138,7 +142,7 @@ Scénarios (durées et formes à confirmer, voir D8) :
 | S4b | 100 cmd/s | `docker compose stop shipping` pendant 30 s puis redémarrage (ajouté le 2026-11-07 pour H3a : service secondaire) |
 | S5 | faible débit | événement dupliqué ×2, idempotence activée puis désactivée (témoin) |
 
-Protocole de run : un seul projet actif → reset + seed → préchauffage non compté → scénario → **attendre le drainage** → `verify-invariants.js` → extraction des latences SQL → métriques Prometheus → trois répétitions en alternant l'ordre des projets. Sorties dans `results/<projet>/<scénario>/rep-<n>/`.
+Protocole de run : un seul projet actif → reset + seed → préchauffage non compté → scénario → **attendre le drainage** → `verify-invariants.js` → extraction des latences SQL → métriques Prometheus → **deux répétitions** en alternant l'ordre des projets (décision de l'équipe du POC, 2026-11-09 ; trois prévues à l'origine). Sorties dans `results/<projet>/<scénario>/rep-<n>/`.
 
 Règles de validité :
 
@@ -165,7 +169,7 @@ k6 n'est pas installé sur la machine de développement : l'exécuter via Docker
 
 - **Suis la méthodologie de `docs/methodologie.md`** : faire le point, expliquer et discuter la conception, n'écrire du code qu'après accord, vérifier, expliquer comment tester, documenter, commiter/pousser sur demande.
 - Réponds en **français** ; le code, les identifiants et les noms de métriques restent en anglais.
-- Documente la compréhension : quand tu prends une décision de conception, note-la dans `docs/` (ADR ou fichier dédié) en distinguant **ce qui vient de l'énoncé**, **ce que le responsable a décidé**, et **ce que tu proposes**.
+- Documente la compréhension : quand tu prends une décision de conception, note-la dans `docs/` (ADR ou fichier dédié) en distinguant **ce qui vient de l'énoncé**, **ce que l'équipe a décidé**, et **ce que tu proposes**.
 - Ne présente jamais un résultat comme mesuré s'il ne l'a pas été. Cite le fichier de `results/` qui le prouve.
 - Ne remplis pas la matrice de décision par des opinions : chaque cellule cite un résultat.
 - Les scripts doivent être idempotents quand c'est possible (reset, seed) et ne jamais supprimer `results/` sans demande.
@@ -177,11 +181,11 @@ k6 n'est pas installé sur la machine de développement : l'exécuter via Docker
 | # | Question | Valeur par défaut |
 |---|---|---|
 | D4 | Réponse initiale en B | `202` sur « reçue », « acceptée » mesurée par horodatage |
-| D5 | Où se place la confirmation | Dès `InventoryReserved`. **Conservée sur `main`** (2026-11-07, responsable du POC). Le workflow de l'énoncé (confirmation après `ShipmentRequested`) sera testé plus tard sur la branche `experiment/workflow-enonce` : colonne `orders.shipping_status`, condition `shipping_status='REQUESTED'` ajoutée à la requête de confirmation, panne de Shipping qui laisse la commande `ACCEPTED`, I8 et I11 reformulés, même changement dans `sync/` et `async/`. |
-| D8 | Durée de S1, forme du pic de S2 | **Tranchée le 2026-11-07** (responsable du POC). Préchauffage non compté de 1 min à 50 cmd/s dans les deux. **S1** : 3 min à 100 cmd/s. **S2** : paliers de 1 min à 100, 200, 300, 400 cmd/s (lecture de la dégradation, hors verdict), puis **palier de 5 min à 500 cmd/s** (fenêtre du verdict de H1). Drainage jusqu'à ce que toutes les commandes soient terminées, plafonné à 10 min. Seules les commandes reçues (`received_at`) pendant la fenêtre de mesure sont comptées. |
+| D5 | Où se place la confirmation | Dès `InventoryReserved`. **Conservée sur `main`** (2026-11-07, équipe du POC). Le workflow de l'énoncé (confirmation après `ShipmentRequested`) sera testé plus tard sur la branche `experiment/workflow-enonce` : colonne `orders.shipping_status`, condition `shipping_status='REQUESTED'` ajoutée à la requête de confirmation, panne de Shipping qui laisse la commande `ACCEPTED`, I8 et I11 reformulés, même changement dans `sync/` et `async/`. |
+| D8 | Durée de S1, forme du pic de S2 | **Tranchée le 2026-11-07** (équipe du POC). Préchauffage non compté de 1 min à 50 cmd/s dans les deux. **S1** : 3 min à 100 cmd/s. **S2** : paliers de 1 min à 100, 200, 300, 400 cmd/s (lecture de la dégradation, hors verdict), puis **palier de 5 min à 500 cmd/s** (fenêtre du verdict de H1). Drainage jusqu'à ce que toutes les commandes soient terminées, plafonné à 10 min. Seules les commandes reçues (`received_at`) pendant la fenêtre de mesure sont comptées. |
 | D12 | Mélange de charge | 3 % de paiements refusés, 2 % sur `SKU-LOW` |
-| D13 | Plafond de VUs k6 au-delà de la saturation (S2) | **Tranchée le 2026-11-07** (responsable du POC) : **délai maximal côté client de 5 s** (k6 abandonne la requête et la compte en échec), identique pour sync/ et async/, plafond de 3 000 VUs (500 cmd/s × 5 s = 2 500 requêtes en vol au plus). La règle « ≥ 1 % d'itérations perdues = run invalide » est conservée : elle signale désormais une limite de k6, pas du système. Les abandons côté client sont rapportés en plus ; le verdict reste lu en base. Détail : `docs/decisions-conception.md`, PC2. |
-| D15 | Échantillonnage des traces pendant les runs de charge | **Tranchée le 2026-11-07** (responsable du POC, option B) : 100 % par défaut (vérifications, cas de compréhension, S5) ; **10 % pendant S1 à S4**, identique pour sync/ et async/ (`OTEL_TRACES_SAMPLER=parentbased_traceidratio`, `OTEL_TRACES_SAMPLER_ARG=0.1`), ajouté au contrôle de parité. H5 se mesure sur les commandes échantillonnées. Essai de calibrage prévu pour mesurer le coût de l'instrumentation. Détail : `docs/decisions-conception.md`, PC3. |
+| D13 | Plafond de VUs k6 au-delà de la saturation (S2) | **Tranchée le 2026-11-07** (équipe du POC) : **délai maximal côté client de 5 s** (k6 abandonne la requête et la compte en échec), identique pour sync/ et async/, plafond de 3 000 VUs (500 cmd/s × 5 s = 2 500 requêtes en vol au plus). La règle « ≥ 1 % d'itérations perdues = run invalide » est conservée : elle signale désormais une limite de k6, pas du système. Les abandons côté client sont rapportés en plus ; le verdict reste lu en base. Détail : `docs/decisions-conception.md`, PC2. |
+| D15 | Échantillonnage des traces pendant les runs de charge | **Tranchée le 2026-11-07** (équipe du POC, option B) : 100 % par défaut (vérifications, cas de compréhension, S5) ; **10 % pendant S1 à S4**, identique pour sync/ et async/ (`OTEL_TRACES_SAMPLER=parentbased_traceidratio`, `OTEL_TRACES_SAMPLER_ARG=0.1`), ajouté au contrôle de parité. H5 se mesure sur les commandes échantillonnées. Essai de calibrage prévu pour mesurer le coût de l'instrumentation. Détail : `docs/decisions-conception.md`, PC3. |
 | D14 | Ordre d'arrivée des événements chez Order (`async/`) | « Noter le fait, puis décider » (validé le 2026-11-07) : chaque événement enregistre son fait, puis Order tente la décision (confirmer ou rejeter pour stock insuffisant) ; le second arrivé décide. Demande `markStockInsufficient` et la condition `stock_status='INSUFFICIENT'` dans le rejet, dans les deux `domain.js`. |
 
 Si une de ces décisions a été tranchée depuis, mets ce tableau à jour plutôt que de t'y fier.
@@ -191,7 +195,7 @@ Si une de ces décisions a été tranchée depuis, mets ce tableau à jour plut�
 **La référence est `docs/hypotheses-assumption.md`** (problème, incertitude, assumptions A-01–A-30, questions Q-01–Q-07, hypothèses avec mesure et seuil, traçabilité métrique → hypothèse, verdicts, menaces à la validité). Ne te fie pas à un résumé : relis ce fichier avant de concevoir une mesure ou un scénario.
 
 Repères (restructuration du 2026-11-07) :
-- **Assumption centrale** : l'événementiel est plus scalable que le synchrone. Elle est mise à l'épreuve par **H1** (S2, 500 cmd/s : débit accepté ≥ 95 % du débit offert, p95 d'acceptation < 1 s, 0 violation de I1), seuils validés par le responsable du POC.
+- **Assumption centrale** : l'événementiel est plus scalable que le synchrone. Elle est mise à l'épreuve par **H1** (S2, 500 cmd/s : débit accepté ≥ 95 % du débit offert, p95 d'acceptation < 1 s, 0 violation de I1), seuils validés par l'équipe du POC.
 - **H2** (latence de complétion, S1) : formulation et seuils validés le 2026-11-07 (écart ≥ 20 %, acceptation p95 < 1 s).
 - **H3a** (panne de Shipping, scénario **S4b**) : gardée, seuils validés le 2026-11-07 (30 s, ≥ 99 % terminées en moins de 2 min).
 - **H3b** (Payment indisponible, S4) : gardée, seuils validés le 2026-11-07 (0 perdue, ≥ 99 % en état final en moins de 2 min ; états perdue / bloquée / terminée).

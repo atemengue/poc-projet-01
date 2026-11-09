@@ -1,0 +1,109 @@
+{
+  "project": "sync",
+  "scenario": "s1",
+  "rep": 2,
+  "witness": false,
+  "noDuplicates": false,
+  "runId": "sync-s1-r2",
+  "profile": {
+    "title": "S1 — Charge normale",
+    "load": "100 cmd/s pendant 3 min (après 1 min de préchauffage à 50 cmd/s)",
+    "action": "aucune",
+    "question": "Les deux architectures satisfont-elles les exigences en conditions normales ?",
+    "hypotheses": [
+      "Exigence S1 : acceptation p95 < 1 s et pas d'accumulation, pour A et pour B",
+      "H2 (latence) : complétion p95 de sync au moins 20 % plus faible que celle d'async, et acceptation p95 de sync < 1 s",
+      "H5 (observabilité) : async < 99 % de traces complètes, sync ≥ 99 %"
+    ],
+    "phases": [
+      {
+        "name": "warmup",
+        "seconds": 60,
+        "rate": 50
+      },
+      {
+        "name": "measure",
+        "seconds": 180,
+        "rate": 100
+      }
+    ],
+    "measure": [
+      "measure"
+    ]
+  },
+  "events": [],
+  "preflight": {
+    "prometheus": true,
+    "jaeger": true,
+    "parity": true
+  },
+  "params": {
+    "TRACE_RATIO": "0.1",
+    "IDEMPOTENCY": "on"
+  },
+  "startedAt": "2026-11-09T21:18:19.402Z",
+  "timeline": [
+    {
+      "name": "warmup",
+      "seconds": 60,
+      "rate": 50,
+      "start": 0,
+      "end": 60,
+      "from": "2026-11-09T21:18:19.402Z",
+      "to": "2026-11-09T21:19:19.402Z"
+    },
+    {
+      "name": "measure",
+      "seconds": 180,
+      "rate": 100,
+      "start": 60,
+      "end": 240,
+      "from": "2026-11-09T21:19:19.402Z",
+      "to": "2026-11-09T21:22:19.402Z"
+    }
+  ],
+  "k6ExitCode": 0,
+  "drain": {
+    "seconds": 0.065,
+    "reason": "toutes les commandes sont terminées",
+    "pending": 0,
+    "incomplete": 0,
+    "done": 20974
+  },
+  "resourcesFile": "resources.json",
+  "invariantsExitCode": 0,
+  "tracesExitCode": 2,
+  "k6": {
+    "iterations": 20974,
+    "dropped": 0,
+    "droppedRatio": 0,
+    "phases": {
+      "warmup": {
+        "requests": 2999,
+        "clientTimeouts": 0,
+        "httpP50": 102.855208,
+        "httpP95": 294.4941249999987,
+        "httpP99": 914.9196304799999
+      },
+      "measure": {
+        "requests": 17975,
+        "clientTimeouts": 0,
+        "httpP50": 98.366709,
+        "httpP95": 156.90432939999974,
+        "httpP99": 474.91239142
+      }
+    },
+    "vusMaxReached": 85,
+    "vusCeiling": 600,
+    "resources": {
+      "samples": 34,
+      "cpuMaxPercent": 87.06,
+      "memMaxPercent": 3.39
+    }
+  },
+  "validity": "valid",
+  "valid": true,
+  "invalidReasons": [],
+  "lost": 0,
+  "finishedAt": "2026-11-09T21:22:40.008Z"
+}
