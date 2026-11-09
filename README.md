@@ -7,7 +7,104 @@ Preuve de concept qui compare deux façons de faire communiquer les mêmes 5 mic
 
 Les deux variantes partagent la même pile d'observabilité (traces, métriques) pour pouvoir être mesurées et comparées.
 
-> **État actuel :** la pile d'observabilité, la base PostgreSQL et les 5 services de la variante synchrone sont en place. La variante asynchrone n'est pas encore écrite.
+> **État actuel :** les deux variantes, l'observabilité, la vérification des invariants et le banc d'essai (scénarios S1 à S5) sont en place, pilotés par la CLI `./poc`. Résultats : `docs/resultats.md` ; présentation : `docs/presentation-poc.md`.
+
+## Démarrage rapide (CLI `./poc`)
+
+Toutes les opérations passent par `./poc`, à la racine (Node 22, sans dépendance ajoutée ; code dans `common/cli/`). Les étapes détaillées et les commandes Docker équivalentes sont dans les sections suivantes.
+
+```bash
+docker network create poc-net        # une seule fois (ignorer « already exists »)
+(cd sync && npm install) ; (cd async && npm install) ; (cd common && npm install)
+
+./poc up sync                        # démarre sync (arrête async, démarre l'observabilité si besoin)
+./poc check                          # santé, infrastructure, parité, trois commandes témoins
+./poc status                         # conteneurs, cibles Prometheus, réglages du run
+./poc order --sku SKU-001 --qty 2    # passer une commande à la main
+./poc reset                          # effacer les commandes (et purger RabbitMQ en async)
+
+./poc scenario s1 --project sync --rep 1     # un run complet selon le protocole
+./poc up async
+./poc scenario s1 --project async --rep 1
+
+./poc down                           # arrêter les variantes (bases conservées)
+```
+
+### Référence des commandes
+
+| Commande | Rôle |
+|---|---|
+| `./poc help` | Liste des commandes |
+| `./poc build [sync\|async]` | Construire l'image des services |
+| `./poc up sync\|async [--build]` | Démarrer une variante ; arrête l'autre (mêmes ports), démarre l'observabilité si elle est arrêtée, attend que tout soit prêt |
+| `./poc down [--obs] [--volumes [--yes]]` | Arrêter les variantes ; `--obs` arrête aussi l'observabilité ; **`--volumes` efface les bases** (confirmation demandée) |
+| `./poc status` | Variante active, conteneurs, cibles Prometheus, réglages du run (traces, idempotence, doublons, latence de Payment) |
+| `./poc check` | Santé des services, Prometheus, Jaeger, RabbitMQ (DLQ), parité, et trois commandes témoins : paiement autorisé, refusé, stock insuffisant avec annulation du paiement. Code 0 si tout est en ordre |
+| `./poc logs <service> [--follow] [--tail N]` | Logs d'un service (`order` … `notification`, `postgres`, `rabbitmq`) |
+| `./poc config [--traces 0.1] [--idempotency on\|off] [--duplicates 2]` | Changer les réglages du run (recrée les services) ; les options absentes reviennent à leur valeur par défaut ; `./poc up` remet tout par défaut |
+| `./poc chaos <service> --latency <ms>` / `--off` | Ralentir un service (S3), puis le rétablir |
+| `./poc fault stop\|start <service>` | Arrêter ou redémarrer un service (S4, S4b) |
+| `./poc reset` | Remettre la base à zéro et purger les files RabbitMQ |
+| `./poc order [--sku SKU-001,SKU-003] [--qty 2] [--card tok_ok\|tok_declined] [--no-wait]` | Passer une commande ; en async, attend son état final (compensation comprise) |
+| `./poc order get <orderId>` | Relire une commande |
+| `./poc test` | Tests de `sync/`, `async/` et `common/` (ceux de `common/` exigent une variante démarrée) |
+| `./poc verify [--out <fichier>]` | Vérifier les invariants I1 à I11 |
+| `./poc latency --run <RUN_ID> [--phase measure] [--slice 10]` | Latences et débit d'un run, depuis la base |
+| `./poc traces --project sync\|async --run <RUN_ID> [--phase measure]` | Part de traces complètes (H5) |
+| `./poc parity` | Parité sync / async (`domain.js` et configuration) |
+| `./poc scenario <s1\|s2\|s3\|s4\|s4b\|s5> --project sync\|async --rep <n> [--witness\|--no-duplicates] [--tag <txt>]` | Un run complet selon le protocole (`common/scripts/run-scenario.js`) ; résultats dans `results/<projet>/<scénario>/rep-<n>/` |
+| `./poc load [--rate 100] [--duration 1m] [--profile constant\|steps]` | Charge k6 libre, rangée en essai à blanc (`results/dry-run/`, jamais citée) |
+
+### Lancer les scénarios
+
+Un scénario se lance en deux temps : démarrer la variante, puis lancer le scénario sur cette variante. Au lancement, le script rappelle le scénario et les hypothèses qu'il évalue ; à la fin, il affiche **VALIDE**, **VALIDE SOUS SATURATION** (ne peut servir qu'à rejeter une hypothèse) ou **INVALIDE**, avec la raison. Les résultats vont dans `results/<projet>/<scénario>/rep-<n>/`.
+
+```bash
+./poc up sync                                   # démarre sync (et arrête async)
+./poc check                                     # facultatif : tout est en ordre ?
+./poc scenario s1 --project sync --rep 1        # lance S1 sur sync
+
+./poc up async                                  # bascule sur async
+./poc scenario s1 --project async --rep 1       # même scénario sur async
+```
+
+| Commande | Scénario | Durée de la charge |
+|---|---|---|
+| `./poc scenario s1 --project … --rep N` | S1 : charge normale, 100 cmd/s (exigence S1, H2, H5) | 4 min |
+| `./poc scenario s2 --project … --rep N` | S2 : pic, paliers jusqu'à 500 cmd/s (H1) | 10 min, plus le drainage |
+| `./poc scenario s3 --project … --rep N` | S3 : Payment lent, 2 s pendant 60 s (H3c) | 4 min |
+| `./poc scenario s4 --project … --rep N` | S4 : Payment arrêté 30 s (H3b) | 4 min |
+| `./poc scenario s4b --project … --rep N` | S4b : Shipping arrêté 30 s (H3a) | 4 min |
+| `./poc scenario s5 --project … --rep N` | S5 : doublons, avec protection (H4) | 2 min |
+| `./poc scenario s5 --project … --rep N --no-duplicates` | S5 : référence sans doublons (surcoût de H4) | 2 min |
+| `./poc scenario s5 --project … --rep N --witness` | S5 : témoin, doublons sans protection | 2 min |
+
+À savoir :
+- `--project` doit être la variante démarrée ; sinon le run est refusé, avec la commande à lancer.
+- `--rep` est le numéro de répétition ; un résultat existant n'est jamais remplacé (choisir une autre répétition ou `--tag <txt>`).
+- Deux répétitions par scénario et par variante sont nécessaires pour un verdict définitif ; alterner l'ordre d'une répétition à l'autre (répétition 1 : sync puis async ; répétition 2 : async puis sync).
+- Le nom d'un run est `<projet>-<scénario>-r<n>` (ex. `sync-s1-r2`) : `./poc latency --run sync-s1-r2 --phase measure` relit ses latences.
+
+Exemple : répétition 2 de S1, S3, S4 et S4b dans les deux variantes (environ 25 min par variante) :
+
+```bash
+./poc up sync
+for s in s1 s3 s4 s4b; do ./poc scenario $s --project sync --rep 2; done
+
+./poc up async
+for s in s1 s3 s4 s4b; do ./poc scenario $s --project async --rep 2; done
+```
+
+Exemple : S5 complet sur une variante (protection, référence, témoin) :
+
+```bash
+./poc up async
+./poc scenario s5 --project async --rep 3 --no-duplicates
+./poc scenario s5 --project async --rep 3
+./poc scenario s5 --project async --rep 3 --witness
+```
+
+À venir : `./poc campaign` (série de runs, alternance de l'ordre sync / async à chaque répétition) et `./poc report` (verdicts H1 à H5 calculés depuis les résultats, `results/REPORT.md`).
 
 ## Prérequis
 
