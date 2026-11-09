@@ -1,5 +1,12 @@
 # POC : communication synchrone vs asynchrone
 
+
+## Équipe
+
+- Regis Atemengue
+- Louis Félix St-Amour
+
+
 Preuve de concept qui compare deux façons de faire communiquer les mêmes 5 microservices d'un flux e-commerce (`order`, `payment`, `inventory`, `shipping`, `notification`) :
 
 - **`sync/`** : appels HTTP directs entre services (Fastify + undici) ;
@@ -8,6 +15,8 @@ Preuve de concept qui compare deux façons de faire communiquer les mêmes 5 mic
 Les deux variantes partagent la même pile d'observabilité (traces, métriques) pour pouvoir être mesurées et comparées.
 
 > **État actuel :** les deux variantes, l'observabilité, la vérification des invariants et le banc d'essai (scénarios S1 à S5) sont en place, pilotés par la CLI `./poc`. Résultats : `docs/resultats.md` ; présentation : `docs/presentation-poc.md`.
+
+Livrables : `docs/POC-plan.md` (PoC Plan), `docs/resultats.md` (résultats des scénarios), `docs/architecture-analysis.md` (Architecture Analysis), `docs/ADR-001.md` (ADR final ; version initiale : `docs/ADR-001-initial.md`), exports PDF dans `reports/`.
 
 ## Démarrage rapide (CLI `./poc`)
 
