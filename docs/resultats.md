@@ -477,7 +477,7 @@ CPU maximal sur tout le run sync : Order 113 % (limite 100 %, **saturé**), Post
 
 ## Machine B (2026-11-15 et 16) : campagne complète sur un autre hôte
 
-*Campagne complète menée par l'équipe sur une seconde machine : toute la pile (services, base, broker, observabilité, k6) tourne sur cet hôte, avec tous les scénarios et deux répétitions (numérotées 3 et 4, suffixe `-machine2`). Caractéristiques de la machine non relevées ; seul indice, Docker y dispose d'environ 31 Go de mémoire (7,7 Go sur la machine A). Ces runs forment une **série à part** : ils ne s'ajoutent pas aux répétitions de la machine A, ils servent à vérifier que les verdicts tiennent sur un autre hôte (décision de l'équipe, PC12).*
+*Campagne complète menée par l'équipe sur une seconde machine : toute la pile (services, base, broker, observabilité, k6) tourne sur cet hôte, avec tous les scénarios et deux répétitions (numérotées 3 et 4, suffixe `-machine2`). Machine B : AMD Ryzen 7 7800X3D (8 cœurs, 16 processeurs logiques), Windows 11, Docker Desktop 29.9.3 avec 30,9 Go de mémoire alloués (machine A : 7,7 Go de mémoire et 10 CPU pour Docker). Ces runs forment une **série à part** : ils ne s'ajoutent pas aux répétitions de la machine A, ils servent à vérifier que les verdicts tiennent sur un autre hôte (décision de l'équipe, PC12).*
 
 Fichiers : `results/<projet>/<scénario>/rep-3-machine2/` et `rep-4-machine2/` (et `-nodup-`, `-witness-` pour S5).
 

@@ -310,6 +310,126 @@ node common/scripts/latency.js --run $RUN --out $OUT/latency.json
 - `latency.js` donne les statuts, le débit et les latences d'acceptation, de confirmation et de complétion (p50/p95/p99), calculés depuis la base. Ce sont elles qui comptent pour les verdicts ; la latence HTTP de k6 sert de contrôle.
 - Un essai à blanc (`results/dry-run/`) sert à calibrer le banc d'essai ; il n'est jamais cité comme résultat.
 
+## Observer un run : lire les graphiques et les outils d'observabilité
+
+Les outils d'observabilité servent à **comprendre** un run pendant qu'il tourne ou juste après : où le système attend, ce qui sature, ce qu'est devenue une commande. **Ils ne donnent pas les verdicts** : les latences et débits qui comptent sont calculés en base et écrits dans `results/<projet>/<scénario>/rep-<n>/` (`latency.json`, `run.json`, `invariants.json`).
+
+| Outil | Adresse | Sert à voir |
+|---|---|---|
+| Grafana | http://localhost:3100 (`admin` / `admin`) | La charge envoyée par k6 et ce qu'encaissent les services, en courbes |
+| Prometheus | http://localhost:9090 | Les mêmes métriques, par requête PromQL (ou via Grafana → *Explore*) |
+| Jaeger | http://localhost:16686 | Le parcours d'une commande à travers les services (traces) |
+| RabbitMQ | http://localhost:15672 (`poc` / `poc`), async seulement | Les files : messages en attente, en cours, en échec |
+| `docker stats` | terminal | CPU et mémoire de chaque conteneur, y compris k6 |
+
+### Grafana : le tableau « POC — Run k6 et services »
+
+**Ouvrir** : Grafana → *Dashboards* → dossier **POC** → **POC — Run k6 et services**. Le tableau se rafraîchit toutes les 5 s et montre les 15 dernières minutes.
+
+**Choisir le run** : liste **Run** en haut à gauche. Le nom est l'identifiant du run : `<projet>-<scénario>-r<n>` pour `./poc scenario` (par exemple `sync-s2-r3`, `async-s5-witness-r1`). Après un run, élargir la période (en haut à droite, par exemple *Last 1 hour*) pour le voir en entier.
+
+**Ligne 1 — k6 : la charge vue par le client**
+
+| Graphique | Ce qu'il montre | Normal | Signal d'alerte |
+|---|---|---|---|
+| **Débit : itérations lancées et requêtes HTTP** | Requêtes envoyées par seconde | Suit le profil : marches de 100, 200… en S2, palier plat en S1 | La courbe passe sous le débit prévu : k6 n'a plus de VU libre pour envoyer (voir le graphique suivant) |
+| **Itérations perdues** | Requêtes que k6 n'a pas pu envoyer | Vide ou 0 | Des pics : au-delà de 1 % sur le run, le run est invalide ou « valide sous saturation » (voir `run.json` → `validity`) |
+| **Statuts HTTP de POST /orders** | Réponses par code | `201` en sync, `202` en async | `502` : une dépendance a échoué (sync, S4) ; `0` : le client a abandonné au bout de 5 s |
+| **Latence de réponse HTTP (vue client)** | p50, p95, p99 du temps de réponse vu par k6 | Quelques ms en async, environ 100 ms en sync à 100 cmd/s | Plateau à 5 s : les requêtes atteignent le délai client et sont abandonnées |
+| **Échecs** | Part des requêtes sans la réponse attendue | 0 | Tout ce qui monte ; à croiser avec les statuts |
+| **VUs actifs** | Requêtes en vol côté k6 | Quelques dizaines | Monte vers 3 000 : le système ralentit (requêtes en vol = débit × temps de réponse) |
+
+Rappel : en async, la réponse HTTP (`202`) arrive **avant** le traitement. Une latence HTTP basse ne veut pas dire que les commandes sont traitées vite : regarder les files (RabbitMQ) et, après le run, `latency.json`.
+
+**Ligne 2 — Services : ce qu'ils encaissent**
+
+| Graphique | Ce qu'il montre | Normal | Signal d'alerte |
+|---|---|---|---|
+| **CPU par service** | CPU consommé, 1 = un cœur (la limite de chaque service) | Bien sous 1 | Une courbe collée à 1 : ce service est le goulot (Order en sync dès 300 cmd/s) |
+| **Retard de la boucle d'événements p99** | Temps d'attente avant que Node traite une tâche | Quelques ms | Des centaines de ms : le service ne suit plus, les requêtes attendent leur tour |
+| **Ressources ouvertes** | Sockets et minuteurs ouverts par service | Stable | Monte sans redescendre : connexions accumulées (appels en attente) |
+| **Mémoire résidente** | Mémoire de chaque service | Stable, loin de 512 Mo | Approche 512 Mo : risque d'arrêt du conteneur |
+
+**Ce que montrent les graphiques selon le scénario**
+
+| Scénario | Synchrone | Asynchrone |
+|---|---|---|
+| S1 (100 cmd/s) | Tout est plat et bas | Tout est plat et bas |
+| S2 (pic) | Order monte à 1 CPU, la boucle d'événements d'Order s'allonge, latence HTTP à 5 s, statuts `0` (abandons), VUs vers 3 000 | Latence HTTP basse longtemps, mais les files grossissent dans RabbitMQ ; la base et Order saturent ; les traitements continuent plusieurs minutes après la fin de la charge |
+| S3 (Payment lent) | Latence HTTP à 5 s, statuts `0` pendant la fenêtre de 60 s | Latence HTTP inchangée ; la file de Payment se remplit puis se vide |
+| S4 (Payment arrêté) | Statuts `502` pendant 30 s, la courbe CPU de Payment disparaît | `202` inchangés ; la file de Payment se remplit pendant 30 s puis se vide au redémarrage |
+| S4b (Shipping arrêté) | Statuts `502` pendant 30 s | `202` inchangés ; la file de Shipping se remplit puis se vide |
+
+**Piège** : après la fin d'un run, les courbes k6 restent plates pendant environ 5 minutes à leur dernière valeur. Ce n'est pas une mesure : Prometheus renvoie la dernière valeur reçue tant que la série n'a pas expiré.
+
+### Prometheus : requêtes utiles
+
+Dans Grafana → *Explore* → source **Prometheus** (ou http://localhost:9090) :
+
+| Requête | Ce qu'elle montre |
+|---|---|
+| `up` | Services collectés : 1 = joignable, 0 = arrêté (en sync, `rabbitmq` vaut 0, c'est normal) |
+| `rate(process_cpu_seconds_total{job="services"}[30s])` | CPU par service (1 = la limite) |
+| `inflight_requests` | Requêtes HTTP en cours de traitement, par service |
+| `outbound_pool_pending` | Sync : appels sortants en attente d'une connexion libre, par service cible (l'équivalent d'une file d'attente) |
+| `rabbitmq_queue_messages_ready` | Async : messages en attente dans les files (total) |
+| `rabbitmq_queue_messages_unacked` | Async : messages en cours de traitement, pas encore acquittés |
+| `duplicates_detected_total` | Doublons écartés par l'idempotence (S5) |
+| `sum(rate(k6_http_reqs_total{testid="<run>"}[15s]))` | Débit envoyé par k6 pour un run donné |
+
+`./poc scenario` enregistre ces séries pour la durée du run dans `prometheus.json` (non versionné).
+
+### Jaeger : suivre une commande
+
+1. Récupérer un identifiant de commande (`./poc order`, ou dans la base).
+2. Jaeger → *Service* `order`, *Tags* `order.id=<orderId>`, **Find Traces** ; ou Grafana → *Explore* → source **Jaeger** → *Search*.
+3. Ouvrir la trace : chaque barre est une opération, sa longueur est sa durée, son décalage est le moment où elle commence.
+
+**Lire la trace**
+
+- **Synchrone** : une seule requête `POST /orders` qui contient, l'un après l'autre, les appels à Payment, Inventory, Shipping et Notification, avec leurs requêtes SQL. La durée totale est le temps de réponse du client. Une barre anormalement longue désigne l'étape lente (en S3, l'appel à Payment dure 2 s).
+- **Asynchrone** : `POST /orders` est courte (le client a sa réponse), puis une suite de traitements `<service> process`, chacun avec l'attribut `event.type` (`OrderCreated`, `PaymentAuthorized`…). Les **espaces vides** entre deux traitements sont le temps passé dans la file : c'est là que se voit l'attente au pic ou pendant une panne.
+- Une trace complète passe par les cinq services. S'il en manque, la commande n'est pas allée au bout (refus de paiement, stock insuffisant) ou est restée bloquée.
+
+**Attention** : pendant S1 à S4, seule une commande sur dix est tracée (échantillonnage de 10 %, identique dans les deux variantes) : une commande peut ne pas avoir de trace. Jaeger ne garde que les 5 000 dernières traces : chercher juste après le run. En S5 et hors scénario, toutes les commandes sont tracées.
+
+### RabbitMQ (async) : les files
+
+Interface http://localhost:15672 (`poc` / `poc`) → onglet **Queues and Streams**. Les compteurs se rafraîchissent toutes les 5 s environ.
+
+| Colonne ou file | Sens | Normal | Signal d'alerte |
+|---|---|---|---|
+| **Ready** | Messages en attente d'être traités | Proche de 0 | Grossit : le service consommateur ne suit pas, ou il est arrêté (S4, S4b) |
+| **Unacked** | Messages en cours de traitement | Au plus 64 par file (la concurrence fixée) | Bloqué à 64 longtemps : le consommateur est saturé |
+| **Incoming / deliver** | Messages publiés et livrés par seconde | Égaux | Livré < publié : la file se remplit |
+| Files `<service>.dlq` | Messages en échec, mis de côté | **Toujours vides** | Un message ici est une erreur de traitement à examiner (`./poc check` les signale) |
+
+En cliquant sur une file, le graphique *Queued messages* montre comment elle s'est remplie puis vidée pendant le run.
+
+### `docker stats` : CPU et mémoire des conteneurs
+
+```bash
+docker stats                              # tous les conteneurs, y compris k6 (poc-k6-<run>)
+```
+
+- **CPU %** : 100 % = un cœur. Limites : 100 % pour chaque service, 200 % pour PostgreSQL et RabbitMQ. Une valeur au-dessus de la limite est un artefact d'échantillonnage : le conteneur est à son plafond.
+- **k6** : s'il dépasse environ 400 %, c'est lui qui charge la machine, et le run ne mesure plus seulement le système (règle de validité, `docs/decisions-conception.md`, PC7 et PC11).
+- `./poc scenario` relève ces valeurs pendant le run (`resources.json`, non versionné) et reporte le maximum de k6 dans `run.json` → `k6.resources`.
+
+### Après le run : les fichiers de résultats
+
+| Fichier | Contenu | Clés utiles |
+|---|---|---|
+| `run.json` | Validité, phases, mesures k6, panne, doublons | `validity`, `invalidReasons`, `k6.droppedRatio`, `k6.phases`, `k6.resources`, `drain`, `lost`, `duplicates` |
+| `latency.json` | Latences calculées en base, par phase | `measure.latency.acceptance.p95`, `byPhase.<phase>`, `slices10s` (évolution par tranches de 10 s) |
+| `invariants.json` | Vérification de I1 à I11 | `verdict`, `results[].violations` |
+| `traces.json` (S1) | Part de traces complètes | `completeRatio`, `tracedOrders` |
+
+```bash
+./poc latency --run <runId>               # latences par phase, depuis la base
+./poc verify                              # invariants
+```
+
 ## Vérifier que tout fonctionne
 
 **Grafana** : dans *Connections → Data sources*, ouvrir `Prometheus` puis `Jaeger` et cliquer sur **Test** : un message vert doit apparaître.
