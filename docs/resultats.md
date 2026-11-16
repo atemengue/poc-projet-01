@@ -1,12 +1,5 @@
 # Résultats des scénarios
 
-> Résultats mesurés, scénario par scénario, avec le fichier de `results/` qui les prouve (CLAUDE.md §10).
-> Les fichiers légers des runs officiels sont versionnés (`run.json`, `latency.json`, `invariants.json`, `traces.json` dans `results/sync/` et `results/async/`) : chaque chiffre cité ici se vérifie dans le dépôt. Restent sur la machine de mesure : les données brutes volumineuses (`prometheus.json`, `resources.json`, `k6-summary.json`) et les essais à blanc.
-> Un verdict n'est définitif qu'avec **deux répétitions concordantes** (décision de l'équipe du POC, 2026-11-09) (`docs/hypotheses-assumption.md`, §4) ; tant que ce n'est pas le cas, il est marqué **provisoire**.
-> Les essais à blanc (`results/dry-run/`, dossiers `*-essai*`) ne sont jamais cités ici.
-
----
-
 ## S1 — Charge normale, 100 cmd/s (exigence S1, H2, H5)
 
 *Répétition 1, 2026-11-08. Profil `s1` : préchauffage 1 min à 50 cmd/s (non compté), puis 3 min à 100 cmd/s (phase `measure`). Traces échantillonnées à 10 % (PC3).*
@@ -383,7 +376,7 @@ Fichiers : `results/<projet>/<scénario>/rep-2/` (et `rep-2-nodup/`, `rep-2-witn
 
 Le run async S1 de la répétition 2 est nettement plus lent que celui de la répétition 1 (acceptation p95 1 660 ms contre 77 ms), avec des pics ponctuels (3,5 s vers 180 s) entre des périodes normales. Indices d'une **machine ralentie**, pas d'un changement du système : tous les conteneurs consomment plus de CPU pour le même travail (PostgreSQL 222 % contre 155 %, Notification 116 % contre 36 %), la base est saine (pas de lignes mortes, 17 Mo), k6 n'est pas en cause (1 cœur, 3 % de mémoire). Mêmes signes en S4b et S3 async (acceptation et phase « après » plus lentes), et en S2 sync (54,6 % accepté contre 70,6 %). Causes possibles : Mac sur batterie ou en économie d'énergie, chauffe du processeur, autres applications.
 
-**Décision de l'équipe du POC (2026-11-09)** : ces runs restent **valides** selon nos critères et ne sont pas écartés après coup ; mais pour **H1 et H2**, la répétition 2 est déclarée **non concluante** (environnement dégradé), et le verdict garde les résultats de la **répétition 1**, provisoires. Une **répétition 3 dans un environnement propre** est nécessaire (PC10, `docs/decisions-conception.md`).
+**Décision du responsable du POC (2026-11-09)** : ces runs restent **valides** selon nos critères et ne sont pas écartés après coup ; mais pour **H1 et H2**, la répétition 2 est déclarée **non concluante** (environnement dégradé), et le verdict garde les résultats de la **répétition 1**, provisoires. Une **répétition 3 dans un environnement propre** est nécessaire (PC10, `docs/decisions-conception.md`).
 
 ### Verdicts consolidés (deux répétitions)
 
@@ -398,3 +391,148 @@ Le run async S1 de la répétition 2 est nettement plus lent que celui de la ré
 | **Exigence S1 — async** | **Respectée — provisoire (rép. 1)** ; rép. 2 non concluante (environnement dégradé) | 77 ms à la rép. 1 ; 1 660 ms à la rép. 2. Répétition 3 en environnement propre |
 | **H2** (latence) | **Rejetée — provisoire (rép. 1)** ; rép. 2 non concluante (environnement dégradé) | Rép. 1 : écart de 9,9 % (146 contre 162 ms), sous le seuil de 20 %. Rép. 2 : écart de 95 % dû au ralentissement de la machine pendant le run async. Répétition 3 en environnement propre |
 | **H1** (pic) | **Non concluante, tendance rejetée — provisoire (rép. 1)** ; rép. 2 non concluante | Rép. 1 : sync valide (70,6 %, 3,7 s), async invalide (43,8 %, 371 s, indicatif) ; rép. 2 : sync 54,6 % en environnement dégradé, aucun run async exploitable. Répétition 3 en environnement propre, et un moyen d'obtenir un run async exploitable |
+
+---
+
+## Répétition 3 (2026-11-15) : S1 et S2 en environnement propre, et verdicts finaux
+
+*Répétition prévue par PC10, limitée à S1 et S2 (H1, H2, exigence S1). Ordre : sync puis async. Environnement propre, décrit avant le run (PC10) : Mac sur secteur, sans économie d'énergie, applications lourdes fermées, pas de mise en veille, observabilité redémarrée, `./poc check` vert. Le run async S2 porte le numéro 4, car `rep-3` existait déjà (run invalide, voir S2).*
+
+| Run | Validité | Préchauffage (acceptation p95) | CPU max de k6 | Itérations perdues | Fichiers |
+|---|---|---|---|---|---|
+| sync S1 | valide | 61 ms (sain) | 44 % | 0 | `results/sync/s1/rep-3/` |
+| async S1 | valide | 76 ms (sain) | 17 % | 0 | `results/async/s1/rep-3/` |
+| sync S2 | valide | 70 ms (sain) | 255 % | 0 | `results/sync/s2/rep-3/` |
+| async S2 | classé « valide sous saturation » par le script ; **invalide** selon le critère de santé de k6 (décision de l'équipe, PC11) | 71 ms (sain) | **485 %** (> 400 %) | 5 444 (2,56 %) | `results/async/s2/rep-4/` |
+
+### S1 : mesures (phase `measure`, 3 min à 100 cmd/s)
+
+| Mesure | sync rép. 1 | sync rép. 3 | async rép. 1 | async rép. 3 |
+|---|---|---|---|---|
+| Commandes mesurées | 17 913 | 17 975 | 17 976 | 17 975 |
+| Acceptation p50 / p95 / p99 | 53 / **68** / 318 ms | 52 / **55** / 58 ms | 53 / **77** / 167 ms | 53 / **58** / 67 ms |
+| Complétion p50 / p95 / p99 | 98 / **146** / 615 ms | 98 / **102** / 110 ms | 100 / **162** / 334 ms | 99 / **110** / 128 ms |
+| Écart de complétion p95 (H2) | | | **9,9 %** | **6,8 %** |
+| Réponse HTTP p95 (k6) | 154 ms | 104 ms | 11 ms | 3 ms |
+| Traces complètes | 1 846 / 1 846 | 1 802 / 1 802 | 1 780 / 1 780 | 1 781 / 1 781 |
+| Invariants | OK | OK | 2 violations de I9 | 1 violation de I9 |
+
+Lecture : les mêmes conclusions qu'à la répétition 1, avec des queues de distribution plus courtes (p99) dans les deux variantes, signe d'une machine moins chargée. L'écart de complétion reste sous 20 %. La violation de I9 est l'artefact connu de `now()` (§ S1), sans effet sur I1 à I8.
+
+### S2 : mesures par palier
+
+| Palier (offert) | Acceptation p95 sync | Acceptation p95 async | HTTP p95 sync | HTTP p95 async | Abandons sync | Abandons async |
+|---|---|---|---|---|---|---|
+| 50 (préchauffage) | 70 ms | 71 ms | 151 ms | 8 ms | 0 | 0 |
+| 100 | 56 ms | 160 ms | 111 ms | 50 ms | 0 | 0 |
+| 200 | 58 ms | **151 ms** | 126 ms | 59 ms | 0 | 0 |
+| 300 | 61 ms | **394 s** | 130 ms | 1,1 s | 0 | 353 |
+| 400 | **311 ms** | 392 s | 610 ms | 5,0 s | 0 | 11 111 |
+| **500** (fenêtre du verdict) | **3,5 s** | 390 s | 5,0 s | 5,0 s | 60 415 | 128 003 |
+
+| Palier à 500 cmd/s | sync rép. 1 | **sync rép. 3** | async rép. 2 (invalide) | **async rép. 3 (invalide)** | Seuil de H1 |
+|---|---|---|---|---|---|
+| Débit accepté / offert | 70,6 % | **412,0 / 500 = 82,4 %** | 52,6 % | **284,0 / 500 = 56,8 %** | ≥ 95 % |
+| Acceptation p95 | 3,7 s | **3,5 s** | 370 s | **390 s** | < 1 s |
+| Violations de I1 | 0 | 0 | 0 | 0 | 0 |
+| Drainage après la charge | 1 s | 0 s | 334 s | 364 s | — |
+| Commandes bloquées | 0 | 0 | 0 | 0 | — |
+
+CPU de k6 par palier, run async (`resources.json`, échantillons de `docker stats`) :
+
+| Palier | k6 max | k6 moyen | Order max | PostgreSQL max | RabbitMQ max |
+|---|---|---|---|---|---|
+| préchauffage | 9 % | 5 % | 85 % | 74 % | 58 % |
+| 100 | 226 % | 37 % | 99 % | 188 % | 97 % |
+| 200 | 27 % | 15 % | 90 % | 169 % | 138 % |
+| 300 | 222 % | 51 % | 97 % | 210 % | 115 % |
+| 400 | 370 % | 99 % | 121 % | 215 % | 115 % |
+| **500** | **485 %** | 190 % | 132 % | 232 % | 174 % |
+| drainage | 81 % | 81 % | 106 % | 274 % | 167 % |
+
+CPU maximal sur tout le run sync : Order 113 % (limite 100 %, **saturé**), PostgreSQL 147 % (limite 200 %), Inventory 55 %, Notification 45 %, Payment 43 %, Shipping 36 %, k6 255 %.
+
+### Lecture
+
+1. **L'environnement propre a joué** : préchauffages sains, queues de distribution plus courtes, et le sync va plus loin qu'à la répétition 1 (conforme jusqu'à 400 cmd/s, 82,4 % accepté à 500 cmd/s). k6 ne consomme plus que 485 % de CPU au pire, contre 1 307 % au run invalide précédent.
+2. **Le run async S2 est invalide pour le verdict**, parce que k6 dépasse 400 % de CPU au palier à 500 cmd/s. Mais jusqu'au palier 400, k6 reste sous ce seuil (370 % au maximum, 99 % en moyenne) : **la dégradation à 300 et 400 cmd/s vient du système**, et se lit comme un diagnostic, hors verdict.
+3. **Même profil qu'aux répétitions 1 et 2** : l'async tient 200 cmd/s (151 ms au p95, mieux qu'à la répétition 1), décroche à 300 cmd/s (acceptation à 6,5 min au p95) et perd 46 % des requêtes à 400 cmd/s ; le sync reste sous 1 s jusqu'à 400 cmd/s. Sur trois tentatives, l'async reste à 44–57 % accepté et à environ 6 minutes d'acceptation au p95 à 500 cmd/s, très loin des seuils.
+4. **Goulot de l'async : Order et la base, ensemble.** Order atteint sa limite d'un cœur dès 300 cmd/s (97 à 132 %) ; PostgreSQL dépasse sa limite de 2 cœurs (210 à 274 %). En async, Order reçoit la requête, écrit l'outbox et consomme tous les événements de retour. Les relevés au-delà des limites viennent de l'échantillonnage de `docker stats`, sous contention : ils montrent une saturation sans en mesurer la part exacte. En sync, le goulot reste **Order seul**.
+5. **La sûreté tient** : aucune violation de I1 à I8, aucune commande perdue ni bloquée, dans les quatre runs.
+
+### Verdicts après la répétition 3 (machine A)
+
+*Complétés par la machine B, section suivante. Répétitions retenues : 1 et 3 pour H1, H2 et l'exigence S1 (la 2 est non concluante pour elles, PC10) ; 1 et 2 pour les autres.*
+
+| Hypothèse | Verdict | Justification |
+|---|---|---|
+| **Exigence S1 — sync** | **Respectée — définitive** | 68, 71 et 55 ms |
+| **Exigence S1 — async** | **Respectée — définitive** | 77 ms (rép. 1) et 58 ms (rép. 3) |
+| **H2** (latence) | **Rejetée — définitive** | Écart de complétion p95 de 9,9 % (rép. 1) et 6,8 % (rép. 3), sous le seuil de 20 % ; acceptation de A sous 1 s |
+| **H1** (pic) | **Non concluante, tendance rejetée** (décision de l'équipe, PC11) | Aucun run async valide à 500 cmd/s : rép. 1 et 2 invalides (itérations perdues), rép. 3 invalide (k6 à 485 % de CPU). Les trois tentatives disent la même chose : 44 à 57 % accepté, acceptation p95 vers 6 min ; avec un k6 sain, l'async perd déjà 46 % des requêtes à 400 cmd/s. Le sync, valide, rate aussi les seuils (70,6 et 82,4 %, 3,7 et 3,5 s) mais va nettement plus loin. La règle de santé de k6 fixée avant le run est appliquée strictement : la déduction n'est pas comptée comme une mesure |
+| H3a, H3b, H3c, H4 | **Supportées — définitives** | Inchangé (§ Répétition 2) |
+| H5 | **Rejetée — définitive** | Inchangé ; rép. 3 : 100 % de traces complètes dans les deux variantes |
+
+---
+
+## Machine B (2026-11-15 et 16) : campagne complète sur un autre hôte
+
+*Campagne complète menée par l'équipe sur une seconde machine : toute la pile (services, base, broker, observabilité, k6) tourne sur cet hôte, avec tous les scénarios et deux répétitions (numérotées 3 et 4, suffixe `-machine2`). Caractéristiques de la machine non relevées ; seul indice, Docker y dispose d'environ 31 Go de mémoire (7,7 Go sur la machine A). Ces runs forment une **série à part** : ils ne s'ajoutent pas aux répétitions de la machine A, ils servent à vérifier que les verdicts tiennent sur un autre hôte (décision de l'équipe, PC12).*
+
+Fichiers : `results/<projet>/<scénario>/rep-3-machine2/` et `rep-4-machine2/` (et `-nodup-`, `-witness-` pour S5).
+
+**Écarts dans les données reçues** :
+- le dossier `async/s2/rep-3-machine2` fourni était une copie identique du run invalide `results/async/s2/rep-3` de la machine A (2026-11-08, k6 à 1 307 %) : il n'a pas été repris. Sur la machine B, il n'y a donc **qu'un seul run async S2** (`rep-4-machine2`) ;
+- le témoin async S5 de la répétition 4 (`async/s5/rep-4-witness-machine2`) est vide : non repris ; celui de la répétition 3 suffit ;
+- les runs S1 n'ont pas de `traces.json` : H5 n'est pas mesurée sur la machine B.
+
+**Validité** : les 31 runs repris sont valides (aucune itération perdue, CPU de k6 au plus 126 %, préchauffages sains, acceptation p95 de 55 à 74 ms).
+
+### S2 (H1) : le premier run async valide
+
+| Palier (offert) | Acceptation p95 sync rép. 3 | Acceptation p95 async rép. 4 | HTTP p95 async | Abandons async |
+|---|---|---|---|---|
+| 50 (préchauffage) | 55 ms | 58 ms | 3 ms | 0 |
+| 100 | 55 ms | 59 ms | 3 ms | 0 |
+| 200 | 55 ms | 71 ms | 11 ms | 0 |
+| 300 | 70 ms | **2,4 s** | 198 ms | 0 |
+| 400 | 142 ms | **61 s** | 265 ms | 0 |
+| **500** (fenêtre du verdict) | **3,1 s** | **239 s** | 1,2 s | **0** |
+
+| Palier à 500 cmd/s | sync rép. 3 | sync rép. 4 | **async rép. 4** | Seuil de H1 |
+|---|---|---|---|---|
+| Validité | valide | valide | **valide** (0 itération perdue, k6 à 63 % de CPU, 818 VUs au plus) | — |
+| Débit accepté / offert | 424,3 / 500 = 84,9 % | 398,8 / 500 = 79,8 % | **484,6 / 500 = 96,9 %** ✓ | ≥ 95 % |
+| Acceptation p95 | 3,1 s | 3,9 s | **239 s** ✗ | < 1 s |
+| Violations de I1 | 0 | 0 | 0 ✓ | 0 |
+| Abandons côté client | 90 664 | 97 393 | **0** | — |
+| Drainage après la charge | 0 s | 0 s | 270 s | — |
+
+CPU maximal (`run.json` pour k6 ; conteneurs relevés sur la machine de mesure) : async, Order 100 % (limite 100 %, saturé), PostgreSQL 205 % (limite 200 %, saturé), RabbitMQ 147 %, autres services 61 à 76 % ; sync, Order 110 % (saturé), PostgreSQL 155 %, autres services 27 à 55 %.
+
+**Lecture** : sur une machine plus puissante, k6 ne sature plus et l'async montre son comportement réel au pic. Il **reçoit tout** (aucun abandon, réponse en 1,2 s au p95) et **finit par accepter** 96,9 % des commandes ; mais l'acceptation arrive en moyenne quatre minutes après la commande, et la file met 4,5 min à se vider. La file absorbe le pic **à l'entrée**, pas dans le traitement : le paiement et la réservation suivent au rythme que Order et la base peuvent tenir. Comme sur la machine A, l'async décroche dès 300 cmd/s, le sync tient le seuil jusqu'à 400 cmd/s ; goulots identiques (Order et la base en async, Order seul en sync).
+
+### S1, S3, S4, S4b, S5
+
+| Hypothèse | Mesure (sync / async), rép. 3 puis rép. 4 | Verdict sur la machine B |
+|---|---|---|
+| Exigence S1 | Acceptation p95 : 56 et 65 ms / 67 et 68 ms | Respectée par les deux |
+| H2 | Complétion p95 : 108 / 133 ms (écart **18,6 %**), puis 120 / 132 ms (9,0 %) | Rejetée (sous 20 % aux deux répétitions ; de peu à la rép. 3) |
+| H3a (S4b, Shipping arrêté) | Commandes de la panne confirmées sans être complétées : 2 685 et 2 727 / async : 3 000 sur 3 000 terminées | Supportée |
+| H3b (S4, Payment arrêté) | Commandes de la panne bloquées : 2 906 et 2 895 / async : 0 bloquée, 0 perdue | Supportée |
+| H3c (S3, Payment lent) | Abandons côté client : 89,5 % et 89,6 % / async : 0, réponse HTTP p95 3 ms | Supportée |
+| H4 (S5, doublons) | Avec protection : 0 commande en double (sync), I7 = 0 (async) ; témoins : 1 200 commandes en double (sync), I7 = 1 199 (async, rép. 3) ; complétion p50 avec doublons / référence : sync +0,2 %, async +0,9 % (rép. 4), en dessous de la référence à la rép. 3 | Supportée |
+| H5 | Non mesurée (pas de `traces.json`) | — |
+
+Comme sur la machine A, la file fait payer la panne aux commandes suivantes en async : en S3, l'acceptation p95 de la phase « après » est de 6,2 et 6,5 s (55 ms en sync). Invariants : I1 à I8 respectés partout ; violations attendues de I10 (commandes bloquées, sync S3 et S4) et de I11 (commandes non complétées, sync S4b), plus I9 (artefact de `now()`) en async ; témoins S5 : I2, I3 et I7 en async, voulus.
+
+### Verdicts, toutes machines
+
+| Hypothèse | Machine A (rép. 1 et 3, ou 1 et 2) | Machine B (rép. 3 et 4) | Verdict final |
+|---|---|---|---|
+| Exigence S1 | Respectée (sync et async) | Respectée (sync et async) | **Respectée — définitive** |
+| **H1** (pic) | Non concluante, tendance rejetée : aucun run async valide (PC11) | **Rejetée** : un run async valide, 239 s d'acceptation p95 pour un seuil de 1 s | **Rejetée** (sur un seul run async valide, machine B ; concordante avec les trois tentatives invalides de la machine A) |
+| H2 (latence) | Rejetée (9,9 et 6,8 %) | Rejetée (18,6 et 9,0 %) | **Rejetée — définitive** |
+| H3a, H3b, H3c | Supportées | Supportées | **Supportées — définitives** |
+| H4 | Supportée | Supportée | **Supportée — définitive** |
+| H5 | Rejetée | Non mesurée | **Rejetée — définitive** (machine A) |

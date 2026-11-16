@@ -1,0 +1,261 @@
+{
+  "measure": {
+    "runId": "async-s5-nodup-r3",
+    "phases": [
+      "measure"
+    ],
+    "total": 601,
+    "finished": 601,
+    "blocked": 0,
+    "confirmedNotCompleted": 0,
+    "firstReceivedAt": "2026-11-16T01:53:31.868Z",
+    "lastReceivedAt": "2026-11-16T01:54:31.867Z",
+    "receivedPerSecond": 10.016833613893564,
+    "acceptedPerSecond": 9.71682861381023,
+    "byStatus": [
+      {
+        "status": "CONFIRMED",
+        "reason": "",
+        "n": 583
+      },
+      {
+        "status": "REJECTED",
+        "reason": "PAYMENT_DECLINED",
+        "n": 18
+      }
+    ],
+    "latency": {
+      "acceptance": {
+        "n": 583,
+        "p50": 62.511,
+        "p95": 66.232,
+        "p99": 70.59367999999995,
+        "max": 74.123
+      },
+      "confirmation": {
+        "n": 583,
+        "p50": 79.122,
+        "p95": 83.8928,
+        "p99": 88.08639999999998,
+        "max": 99.109
+      },
+      "completion": {
+        "n": 583,
+        "p50": 129.907,
+        "p95": 136.63989999999998,
+        "p99": 141.04369999999994,
+        "max": 154.962
+      }
+    }
+  },
+  "byPhase": {
+    "warmup": {
+      "runId": "async-s5-nodup-r3",
+      "phases": [
+        "warmup"
+      ],
+      "total": 599,
+      "finished": 599,
+      "blocked": 0,
+      "confirmedNotCompleted": 0,
+      "firstReceivedAt": "2026-11-16T01:52:31.969Z",
+      "lastReceivedAt": "2026-11-16T01:53:31.768Z",
+      "receivedPerSecond": 10.016889914547066,
+      "acceptedPerSecond": 9.782772287161993,
+      "byStatus": [
+        {
+          "status": "CONFIRMED",
+          "reason": "",
+          "n": 585
+        },
+        {
+          "status": "REJECTED",
+          "reason": "PAYMENT_DECLINED",
+          "n": 14
+        }
+      ],
+      "latency": {
+        "acceptance": {
+          "n": 585,
+          "p50": 62.983,
+          "p95": 67.199,
+          "p99": 71.38064,
+          "max": 81.09
+        },
+        "confirmation": {
+          "n": 585,
+          "p50": 80.036,
+          "p95": 85.5398,
+          "p99": 90.38748,
+          "max": 109.318
+        },
+        "completion": {
+          "n": 585,
+          "p50": 131.249,
+          "p95": 139.3238,
+          "p99": 144.1085999999999,
+          "max": 172.323
+        }
+      }
+    },
+    "measure": {
+      "runId": "async-s5-nodup-r3",
+      "phases": [
+        "measure"
+      ],
+      "total": 601,
+      "finished": 601,
+      "blocked": 0,
+      "confirmedNotCompleted": 0,
+      "firstReceivedAt": "2026-11-16T01:53:31.868Z",
+      "lastReceivedAt": "2026-11-16T01:54:31.867Z",
+      "receivedPerSecond": 10.016833613893564,
+      "acceptedPerSecond": 9.71682861381023,
+      "byStatus": [
+        {
+          "status": "CONFIRMED",
+          "reason": "",
+          "n": 583
+        },
+        {
+          "status": "REJECTED",
+          "reason": "PAYMENT_DECLINED",
+          "n": 18
+        }
+      ],
+      "latency": {
+        "acceptance": {
+          "n": 583,
+          "p50": 62.511,
+          "p95": 66.232,
+          "p99": 70.59367999999995,
+          "max": 74.123
+        },
+        "confirmation": {
+          "n": 583,
+          "p50": 79.122,
+          "p95": 83.8928,
+          "p99": 88.08639999999998,
+          "max": 99.109
+        },
+        "completion": {
+          "n": 583,
+          "p50": 129.907,
+          "p95": 136.63989999999998,
+          "p99": 141.04369999999994,
+          "max": 154.962
+        }
+      }
+    }
+  },
+  "slices10s": [
+    {
+      "startS": "0",
+      "receivedPerSecond": 10.1,
+      "acceptedPerSecond": 10,
+      "unfinished": 0,
+      "acceptanceP95": 71.3582,
+      "acceptanceP99": 76.33998000000003,
+      "completionP95": 146.25545
+    },
+    {
+      "startS": "10",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.8,
+      "unfinished": 0,
+      "acceptanceP95": 67.21525,
+      "acceptanceP99": 68.76845,
+      "completionP95": 139.78915
+    },
+    {
+      "startS": "20",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.7,
+      "unfinished": 0,
+      "acceptanceP95": 66.5484,
+      "acceptanceP99": 67.22428,
+      "completionP95": 137.7412
+    },
+    {
+      "startS": "30",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.8,
+      "unfinished": 0,
+      "acceptanceP95": 65.17335,
+      "acceptanceP99": 67.59044,
+      "completionP95": 134.653
+    },
+    {
+      "startS": "40",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.7,
+      "unfinished": 0,
+      "acceptanceP95": 65.1532,
+      "acceptanceP99": 69.26839999999997,
+      "completionP95": 134.1296
+    },
+    {
+      "startS": "50",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.7,
+      "unfinished": 0,
+      "acceptanceP95": 65.73259999999999,
+      "acceptanceP99": 68.76407999999998,
+      "completionP95": 134.5848
+    },
+    {
+      "startS": "60",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.7,
+      "unfinished": 0,
+      "acceptanceP95": 65.33160000000001,
+      "acceptanceP99": 68.49295999999998,
+      "completionP95": 134.02339999999998
+    },
+    {
+      "startS": "70",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.7,
+      "unfinished": 0,
+      "acceptanceP95": 65.5288,
+      "acceptanceP99": 67.76803999999998,
+      "completionP95": 135.1812
+    },
+    {
+      "startS": "80",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.6,
+      "unfinished": 0,
+      "acceptanceP95": 67.50275,
+      "acceptanceP99": 69.2678,
+      "completionP95": 139.89274999999998
+    },
+    {
+      "startS": "90",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.6,
+      "unfinished": 0,
+      "acceptanceP95": 65.18724999999999,
+      "acceptanceP99": 71.7081,
+      "completionP95": 134.51524999999998
+    },
+    {
+      "startS": "100",
+      "receivedPerSecond": 10,
+      "acceptedPerSecond": 9.9,
+      "unfinished": 0,
+      "acceptanceP95": 66.2564,
+      "acceptanceP99": 67.26925999999997,
+      "completionP95": 137.00449999999998
+    },
+    {
+      "startS": "110",
+      "receivedPerSecond": 9.9,
+      "acceptedPerSecond": 9.6,
+      "unfinished": 0,
+      "acceptanceP95": 66.88075,
+      "acceptanceP99": 69.0524,
+      "completionP95": 136.73725
+    }
+  ]
+}

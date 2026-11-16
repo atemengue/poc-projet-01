@@ -1,0 +1,190 @@
+{
+  "project": "sync",
+  "scenario": "s2",
+  "rep": 3,
+  "witness": false,
+  "noDuplicates": false,
+  "runId": "sync-s2-r3",
+  "profile": {
+    "title": "S2 — Pic de trafic",
+    "load": "paliers de 1 min à 100, 200, 300, 400 cmd/s, puis 5 min à 500 cmd/s (fenêtre du verdict)",
+    "action": "aucune",
+    "question": "Quelle architecture se dégrade le plus progressivement quand la charge augmente ?",
+    "hypotheses": [
+      "H1 (scalabilité, hypothèse centrale) : sur le palier à 500 cmd/s, async garde un débit accepté ≥ 95 % du débit offert, une acceptation p95 < 1 s et 0 violation de I1, alors que sync manque au moins un de ces seuils"
+    ],
+    "phases": [
+      {
+        "name": "warmup",
+        "seconds": 60,
+        "rate": 50
+      },
+      {
+        "name": "step-100",
+        "seconds": 60,
+        "rate": 100
+      },
+      {
+        "name": "step-200",
+        "seconds": 60,
+        "rate": 200
+      },
+      {
+        "name": "step-300",
+        "seconds": 60,
+        "rate": 300
+      },
+      {
+        "name": "step-400",
+        "seconds": 60,
+        "rate": 400
+      },
+      {
+        "name": "measure",
+        "seconds": 300,
+        "rate": 500
+      }
+    ],
+    "measure": [
+      "measure"
+    ]
+  },
+  "events": [],
+  "preflight": {
+    "prometheus": true,
+    "jaeger": true,
+    "parity": true
+  },
+  "params": {
+    "TRACE_RATIO": "0.1",
+    "IDEMPOTENCY": "on"
+  },
+  "startedAt": "2026-11-16T01:00:24.267Z",
+  "timeline": [
+    {
+      "name": "warmup",
+      "seconds": 60,
+      "rate": 50,
+      "start": 0,
+      "end": 60,
+      "from": "2026-11-16T01:00:24.267Z",
+      "to": "2026-11-16T01:01:24.267Z"
+    },
+    {
+      "name": "step-100",
+      "seconds": 60,
+      "rate": 100,
+      "start": 60,
+      "end": 120,
+      "from": "2026-11-16T01:01:24.267Z",
+      "to": "2026-11-16T01:02:24.267Z"
+    },
+    {
+      "name": "step-200",
+      "seconds": 60,
+      "rate": 200,
+      "start": 120,
+      "end": 180,
+      "from": "2026-11-16T01:02:24.267Z",
+      "to": "2026-11-16T01:03:24.267Z"
+    },
+    {
+      "name": "step-300",
+      "seconds": 60,
+      "rate": 300,
+      "start": 180,
+      "end": 240,
+      "from": "2026-11-16T01:03:24.267Z",
+      "to": "2026-11-16T01:04:24.267Z"
+    },
+    {
+      "name": "step-400",
+      "seconds": 60,
+      "rate": 400,
+      "start": 240,
+      "end": 300,
+      "from": "2026-11-16T01:04:24.267Z",
+      "to": "2026-11-16T01:05:24.267Z"
+    },
+    {
+      "name": "measure",
+      "seconds": 300,
+      "rate": 500,
+      "start": 300,
+      "end": 600,
+      "from": "2026-11-16T01:05:24.267Z",
+      "to": "2026-11-16T01:10:24.267Z"
+    }
+  ],
+  "k6ExitCode": 0,
+  "drain": {
+    "seconds": 0.027,
+    "reason": "toutes les commandes sont terminées",
+    "pending": 0,
+    "incomplete": 0,
+    "done": 195883
+  },
+  "resourcesFile": "resources.json",
+  "invariantsExitCode": 0,
+  "k6": {
+    "iterations": 212760,
+    "dropped": 0,
+    "droppedRatio": 0,
+    "phases": {
+      "warmup": {
+        "requests": 2998,
+        "clientTimeouts": 0,
+        "httpP50": 101.798145,
+        "httpP95": 105.11702075000001,
+        "httpP99": 114.35760437000008
+      },
+      "step-100": {
+        "requests": 5974,
+        "clientTimeouts": 0,
+        "httpP50": 100.522147,
+        "httpP95": 104.70672139999998,
+        "httpP99": 130.04996221
+      },
+      "step-200": {
+        "requests": 11947,
+        "clientTimeouts": 0,
+        "httpP50": 101.877766,
+        "httpP95": 115.1885057999997,
+        "httpP99": 132.77777097999999
+      },
+      "step-300": {
+        "requests": 17947,
+        "clientTimeouts": 0,
+        "httpP50": 104.494867,
+        "httpP95": 144.2021473,
+        "httpP99": 197.49744762000003
+      },
+      "step-400": {
+        "requests": 23947,
+        "clientTimeouts": 0,
+        "httpP50": 123.245795,
+        "httpP95": 295.7832729000007,
+        "httpP99": 532.5006654800001
+      },
+      "measure": {
+        "requests": 149947,
+        "clientTimeouts": 90664,
+        "httpP50": 3992.591169,
+        "httpP95": 5000.8074612,
+        "httpP99": 5001.101099500001
+      }
+    },
+    "vusMaxReached": 2496,
+    "vusCeiling": 3000,
+    "resources": {
+      "samples": 87,
+      "cpuMaxPercent": 99.17,
+      "memMaxPercent": 4.4
+    }
+  },
+  "validity": "valid",
+  "valid": true,
+  "invalidReasons": [],
+  "lost": 16877,
+  "finishedAt": "2026-11-16T01:10:35.734Z"
+}

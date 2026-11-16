@@ -1,0 +1,13 @@
+{
+  "project": "async",
+  "runId": "async-s1-r3",
+  "phases": [
+    "measure"
+  ],
+  "ordersInRun": 17975,
+  "tracedOrders": 1781,
+  "completeTraces": 1781,
+  "completeRatio": 1,
+  "sampledRatio": 0.09908205841446453,
+  "incomplete": []
+}
